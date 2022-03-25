@@ -1,0 +1,65 @@
+"Phrases"
+{
+	// some games have different formatting for different specs, default name colors or no default name colors
+	// e.g. csgo's resource/game_lang.txt uses no color for the player name except for spectators(\x02)?
+	// there also seems to be team color (etx \x03) and team color for a name at the start of the message (stx \0x02)???
+	// i don't really care and will just blanket color these with the respective \x07 colors. if you are bothered by that send me a PR
+	"Pattern_Clean"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"	"{1} :  {2}"
+	}
+	"Pattern_Group"
+	{
+		//with groups there is an additional prefix that can color the whole thing
+		// that's because for '(ADMIN) name :  message' the left side is historically all green
+		"#format"	"{1:s},{2:s},{3:s},{4:s}"
+		"en"	"{1}({2}) {3} :  {4}"
+	}
+	"Pattern_Sendflags"
+	{
+		"#format"	"{1:s},{2:s},{3:s}"
+		"en"	"*{1}* {2} :  {3}"
+	}
+	"Pattern_SendflagsGroup"
+	{
+		"#format"	"{1:s},{2:s},{3:s},{4:s},{5:s}"
+		"en"	"*{1}*{2}({3}) {4} :  {5}"
+	}
+	"Senderflag_Dead"
+	{
+		"en"	"DEAD"
+	}
+	"Senderflag_Spectator"
+	{
+		"en"	"SPEC"
+	}
+	"Group_All"
+	{
+		"en"	"ALL"
+	}
+	"Group_Team"
+	{
+		"en"	"TEAM"
+	}
+	"Group_Team1"
+	{
+		"en"	"Combine"
+	}
+	"Group_Team2"
+	{
+		"en"	"Rebels"
+	}
+	"Group_Spectator"
+	{
+		"en"	"Spectator"
+	}
+	"Group_Admin"
+	{
+		"en"	"ADMIN"
+	}
+	"Group_Direct"
+	{
+		"en"	"DM"
+	}
+}

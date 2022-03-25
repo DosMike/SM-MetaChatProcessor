@@ -1,0 +1,66 @@
+"Phrases"
+{
+	"Pattern_Clean"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"	"{1} :  {2}"
+	}
+	"Pattern_Group"
+	{
+		//with groups there is an additional prefix that can color the whole thing
+		// that's because for '(ADMIN) name :  message' the left side is historically all green
+		"#format"	"{1:s},{2:s},{3:s},{4:s}"
+		"en"	"{1}({2}) {3} :  {4}"
+	}
+	"Pattern_Sendflags"
+	{
+		"#format"	"{1:s},{2:s},{3:s}"
+		"en"	"*{1}* {2} :  {3}"
+	}
+	"Pattern_SendflagsGroup"
+	{
+		"#format"	"{1:s},{2:s},{3:s},{4:s},{5:s}"
+		"en"	"*{1}*{2}({3}) {4} :  {5}"
+	}
+	"Senderflag_Dead"
+	{
+		"en"	"DEAD"
+	}
+	"Senderflag_Spectator"
+	{
+		"en"	"SPEC"
+	}
+	"Group_All"
+	{
+		"en"	"ALL"
+	}
+	"Group_Team"
+	{
+		"en"	"TEAM"
+	}
+	"Group_Team1"
+	{
+		"en"	"Survivor"
+	}
+	"Group_Team2"
+	{
+		"en"	"Infected"
+	}
+	"Group_Team3"
+	{
+		//secret team that e.g. "[L4D2] Play on Team 4" unlocks
+		"en"	"L4D1 Survivor"
+	}
+	"Group_Spectator"
+	{
+		"en"	"Spectator"
+	}
+	"Group_Admin"
+	{
+		"en"	"ADMIN"
+	}
+	"Group_Direct"
+	{
+		"en"	"DM"
+	}
+}

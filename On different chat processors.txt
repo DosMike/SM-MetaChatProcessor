@@ -1,0 +1,65 @@
+Historically it was just a SayText/SayText2 pass-through. This allows plugins 
+to more easily hook messages using well defined argument lists in the presented 
+forwards. The components that could be edited were the name and the message, 
+that were then stitched back into a previously detected message format. With 
+time people added pre and post hooks as well as limited capabilities to change 
+the message format, and since it's the most used functionallity, some people 
+integrated name tags into the chat processor. While i think Chat Processors 
+should only provide the capabilities to edit messages, there's even one chat 
+processor that integrated a whole bunch of modules like tag, message 
+translations and more directly into the 'what should be a' libirary, and while 
+the feature set of that plugin is great, I disagree. 
+
+SCP (Redux)
+Has a main and post hook. It's pretty simple, but can only change name and 
+message, the format stays untouched.
+This also has a slight bug (iirc pre 2.3.0) where the Post forward would only 
+be called for changed messages.
+
+Drixevel's Chat Processor
+Not only does it allow the manipulation of name and message, but also the 
+format string used to send the message. There is also an additional forward 
+that gets called on the stiched chat message for every player, just before it's 
+sent. This allows for a late, player based manipulation like for example 
+translations, censoring based on client prefs, ...
+Additionally this plugin can manage player tags (but not store them) as in name 
+prefixes. And while I understand the drive to integrate it into the chat 
+processor, In my opinion this still belongs into a module.
+Lastly this plugin implements allchat (disable team chat?) deadchat (treat dead 
+as team) and some color processing and stripping options that, again I think 
+should be managed through a module, not this plugin itself.
+
+Eyal282's Chat Revamp
+It is plain, very plain. I think you'll have more control using any other 
+processor, but it's surely a nice exercise in hooking SayText2 (and only that).
+
+Cider Chat Processor
+This is again a bit more stripped down from Drixevel's version.
+The difference is that it no longer has the formatted forward, but instead 
+provides a Pre forward to change the format before passing of to other plugins. 
+This was used to implement allchat and deadchat *again*, but allowing to remove 
+the `*DEAD*` prefix along the way. Again, I think those should be modules, not 
+integrated.
+
+Color Chat Processor
+As the name implies, this well modularized monolith of a chat processor also 
+includes color handling. Besides parsing player chat with SayText/SayText2 
+messages it also hooks radio messages and system messages (TextMsg/RadioMsg). 
+It then provides the usual color and format stiching and everything is done 
+with per player callbacks. Looks great and has a lot of modules.
+
+MetaChatProcessor
+While I don't want a library as big as Color Chat Processor and I think editing 
+player chat messages is enough, I want to provide (some) compatibility with the 
+old chat processors while still providing new functionallity. The format string 
+is broken down into flags that can be easily checked and edited. There's six 
+stages to process messages in; Pre, Early, Default, Late, Formatted and Post. 
+Here they are hooked using private forwards instead of public ones.
+SCP redux is supported out of the box and Drixevel's as well as Cider can 
+easily be supported using modules, allowing different plugins to (kind of) work 
+together while staying true to the core of a chat processor. :)
+
+CPS that MCP will probably support:
+* SCP Redux
+* Drixevel's with module
+* CiderCP with module

@@ -1,0 +1,80 @@
+"Games" {
+	"#default" {
+		"Keys" {
+			"translation_file"	""
+			
+			//set mode to 0 to use default colors \x03
+			//set to 1 for games where names are not team colored by default (or look broken)
+			"teamcolor_mode"		"0"
+			"teamcolor_spec"		"CCCCCC"
+			"teamcolor_team1"		"99CCFF"
+			"teamcolor_team2"		"FF4040"
+			"teamcolor_team3"		"ffe73e"
+			"teamcolor_team4"		"3EFF3E"
+			
+			// this is the amount of team name flags to look for in the message name
+			// 0=uses TEAM by default, >0 look for the msgname_tagN strings
+			// check any resource/$game_$lang.txt for _Chat_ lines
+			"msgname_teams"		"0"
+			//"msgname_tag1"	"" //tag that team 1 uses in the translation files
+			//"msgname_tag2"	"" //tag that team 2 uses in the translation files
+		}
+	}
+	"cstrike" {
+		"Keys" {
+			"translation_file"	"cstrike"
+			
+			"teamcolor_team1"		"FF4040"
+			"teamcolor_team2"		"99CCFF"
+			
+			"msgname_teams"		"2"
+			"msgname_tag1"	"_CT"
+			"msgname_tag2"	"_T"
+		}
+	}
+	"csgo" {
+		"Keys" {
+			"translation_file"	"csgo"
+			
+			"teamcolor_team1"		"FF4040"
+			"teamcolor_team2"		"99CCFF"
+			
+			"msgname_teams"		"2"
+			"msgname_tag1"	"_CT"
+			"msgname_tag2"	"_T"
+		}
+	}
+	"tf" {
+		"Keys" {
+			"translation_file"	"tf2"
+			
+			"teamcolor_team1"		"FF4040"
+			"teamcolor_team2"		"99CCFF"
+		}
+	}
+	"hl2dm" {
+		"Keys" {
+			"translation_file"	"hl2dm"
+		}
+	}
+	"left4dead" {
+		"Keys" {
+			"translation_file"	"l4d"
+			
+			"msgname_teams"		"2"
+			"msgname_tag1"	"Survivor"
+			"msgname_tag2"	"Infected"
+		}
+	}
+	"left4dead2" {
+		"Keys" {
+			"translation_file"	"l4d2"
+			
+			"teamcolor_team3"		"99CCFF"
+			
+			"msgname_teams"		"2"
+			"msgname_tag1"	"Survivor"
+			"msgname_tag2"	"Infected"
+		}
+	}
+}
