@@ -56,10 +56,63 @@ is broken down into flags that can be easily checked and edited. There's six
 stages to process messages in; Pre, Early, Default, Late, Formatted and Post. 
 Here they are hooked using private forwards instead of public ones.
 SCP redux is supported out of the box and Drixevel's as well as Cider can 
-easily be supported using modules, allowing different plugins to (kind of) work 
-together while staying true to the core of a chat processor. :)
+probably be supported using modules, allowing different plugins to (kind of) 
+work together while staying true to the core of a chat processor. :)
 
 CPS that MCP will probably support:
 * SCP Redux
 * Drixevel's with module
 * CiderCP with module
+
+Below is listed how Chat-Processor seem to be commonly used for tagging/chat colors:
+
+This is how CCC with SCP and CCC menu does it:
+ natives: get/set/reset for all 3 collors and tag
+ * (two config forwards when colors are loaded in client post admin)
+ * color strip name & message
+ * after forward color name
+ *  or teamcolor it (because tag)
+ * after forward prepend tag
+ * after forward color message
+ * some author manipulation for csgo colors (why \x01\x0b?)
+ * after forward return
+ -/ done
+
+This is how Drixevel's CP with HexTags does it:
+So Drixevel CP's tag utilities sit somewhere in between SCP and CCC.
+While it has the capabilities/natives to apply colors and tags, it leaves the 
+actual configuration to other plugins, namely HexTags. The result is the same:
+Two Plugins offer tag/coloring capabilities through a config.
+Drixevel's allows for a list of tags that all get prepended.
+ 
+ natives: add/remove/swap/reset tags, set for all 3 colors, no getters
+ * (post forwards for every tag/color manipulation)
+ * prepend tags and name color
+ * color message
+ -/ done
+ HexTags is a bit weird, as it flattens the tags back into a single?
+ natives: get/set/reset tag forward for config selectors (client,configkey->bool)
+ * Creates an "_Early" forward (HexTags_OnMessagePreProcess)
+ * Parse custom {rainbow} and {random} color tags to apply to name
+ * Parse custom tag {} templates to prepend to name
+ * Parse custom {rainbow} and {random} color tags to apply to message
+ * Creates nested forward (HexTags_OnMessageProcess)
+ * copy back
+ * Creates nested "_Late" forward (HexTags_OnMessageProcessed)
+ -/ done
+
+Note that HexTags COMPLETELY ignores Drixevel's tag system. Be it due to that
+system being added later or simply for the need of dynamic tags like {time}.
+On top of that HexTags basically implements another chat processor with 
+forwards that do no receive the recipients list.
+HexTags does however load from config and from what i can tell even store in 
+client prefs.
+
+As a result / based on poular usage of chat processors MCP will expose a tag 
+parameter similar to the name, but keep it separate. This DOES break things a 
+bit with SCP, as CCC will not use the tag parameter. But I think with a 
+compatibility module for CCC we should be good to go on that front.
+ Single tag, easily editable / readable for everyone. With this i Will probably 
+take in CCC type forwards for "hey i want to color this and that" but in 
+contrast MCP will "only" have a tag string. This allows plugins to more easily 
+create multicolor tags, like multicolor names without the weird extra tag color

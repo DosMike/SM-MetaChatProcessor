@@ -172,19 +172,21 @@ void ParseMessageFormat(const char[] format, mcpSenderFlag& senderflags, mcpTarg
 	bool ffSpec = StrContains(format, "spec", false)>0;
 	bool ffDead = StrContains(format, "dead", false)>0;
 	int iTeam;
-	for (int tag;tag<g_msgNameTagCount;tag++) {
+	if (!ffTeam) for (int tag;tag<g_msgNameTagCount;tag++) {
 		if (StrContains(format, g_msgNameTags[tag], false)>0) {
 			iTeam=tag+2; //unassigned and spectator are always skipped, spec has its own format
 			break;
 		}
 	}
+	
 	senderflags = mcpSenderNone;
 	if (ffSpec) senderflags |= mcpSenderSpectator;
 	if (ffDead) senderflags |= mcpSenderDead;
-	targetgroup = mcpTargetNone;
+	
 	if (iTeam) targetgroup = view_as<mcpTargetGroup>(iTeam);
 	else if (ffTeam) targetgroup = mcpTargetTeamSender;
 	else if (!ffAll && ffSpec) targetgroup = mcpTargetSpecator;
+	else targetgroup = mcpTargetNone;
 }
 /**
  * Tries to rebuild a message format string that resembles the original enough
@@ -221,78 +223,5 @@ void BuildMessageFormat(mcpSenderFlag senderflags, mcpTargetGroup targetgroup, c
 		} else if (ffSpec) {
 			strcopy(buffer[pos], bufferlen-pos, "Spec");
 		}
-	}
-}
-
-/**
- * roughly check if the color is a valid color code, or a rgb/rgba color specifier, or and existing color name
- * and return the native color string for that color.
- * for CSGO: check if strlen==1 && 0<char[0]<32
- * for old source: check if 0<char[0]<=6 && strlen == 1 || char[0]==7/'#' && strlen == 7 || char[0]==9/'#' && strlen==9
- * for all: check if string is valid color name
- * note: output size should be at least 2
- * @param color - the color specifier, 
- * @param output - the native color \x01..\x10 i think for csgo, \x01..\x08 for others
- * @param maxsize - size of output buffer
- * @return true if the color seemd valid and output was set.
- */
-bool ParseChatColor(const char[] color, char[] output, int maxsize, int author) {
-	if (!color[0]) return false;
-	//control character == native color
-	if( (GetEngineVersion() == Engine_CSGO && 0 < color[0] <= 0x10) || 
-		(color[0] <= 0x06) ){ //all default colors supported by non csgo
-		output[0] = color[0];
-		output[1] = 0;
-		return true;
-	} else if (color[0] == 7 || color[0] == 8 || color[0] == '#' ) {
-		//color buffer is \x07rrggbb\x00 OR \x08rrggbbaa\x00
-		int bytes = 8;
-		int inlen = strlen(color);
-		if (color[0]=='#') {
-			if (inlen == 9) bytes = 10;
-			else if (inlen != 7) ThrowError("Input has no complete color hex tag!");
-		} else if (color[0]==8) {
-			if (inlen != 9) ThrowError("Input has no complete x8 color tag!");
-			bytes = 10;
-		} else if (inlen != 7) ThrowError("Input has no complete x7 color tag!");
-		if (bytes > maxsize) ThrowError("Output can't hold color format");
-		strcopy(output, bytes, color);
-		output[0] = (bytes==10)?8:7;
-		return true;
-	} else if( CColorExists(color) ){
-		char tmp[32];
-		FormatEx(tmp, sizeof(tmp), "{%s}", color);
-		CFormatColor(tmp, sizeof(tmp), author);
-		strcopy(output, maxsize, tmp);
-		return true;
-	}
-	output[0] = 0;
-	return false;
-}
-
-void RemoveTextColors(char[] message, int maxsize, bool removeTags) {
-	if (removeTags) CRemoveTags(message, maxsize);
-	int read,write;
-	if (GetEngineVersion()==Engine_CSGO) {
-		for (;message[read] && read < maxsize;read+=1) {
-			if (0 < message[read] <= 0x32) continue; //just skip all control chars, they have no business here
-			if (read!=write)
-				message[write] = message[read];
-			write+=1;
-		}
-	} else {
-		for (;message[read] && read < maxsize;read+=1) {
-			if (message[read]==7) { read+=6; continue; } //skip following RRGGBB as well
-			else if (message[read]==8) { read+=8; continue; } //skip following RRGGBBAA as well
-			else if (0 < message[read] <= 0x32) continue; //just skip all control chars, they have no business here
-			if (read!=write)
-				message[write] = message[read];
-			write+=1;
-		}
-	}
-	if (read!=write) {//changed
-		//move 0 terminator as well; max index is at size-1
-		if (write < maxsize-1) message[write]=0;
-		else message[maxsize-1] = 0; //safety
 	}
 }

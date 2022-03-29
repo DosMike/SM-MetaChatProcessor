@@ -1,61 +1,173 @@
 "Phrases"
 {
-	"Pattern_Clean"
+	"Group_Admin"
 	{
-		"#format"	"{1:s},{2:s}"
-		"en"	"{1} :  {2}"
-	}
-	"Pattern_Group"
-	{
-		//with groups there is an additional prefix that can color the whole thing
-		// that's because for '(ADMIN) name :  message' the left side is historically all green
-		"#format"	"{1:s},{2:s},{3:s},{4:s}"
-		"en"	"{1}({2}) {3} :  {4}"
-	}
-	"Pattern_Sendflags"
-	{
-		"#format"	"{1:s},{2:s},{3:s}"
-		"en"	"*{1}* {2} :  {3}"
-	}
-	"Pattern_SendflagsGroup"
-	{
-		"#format"	"{1:s},{2:s},{3:s},{4:s},{5:s}"
-		"en"	"*{1}*{2}({3}) {4} :  {5}"
-	}
-	"Senderflag_Dead"
-	{
-		"en"	"DEAD"
-	}
-	"Senderflag_Spectator"
-	{
-		"en"	"SPEC"
+		"en"	"ADMIN"
 	}
 	"Group_All"
 	{
 		"en"	"ALL"
 	}
-	"Group_Team"
-	{
-		"en"	"TEAM"
-	}
-	"Group_Team1"
-	{
-		"en"	"Red"
-	}
-	"Group_Team2"
-	{
-		"en"	"Blue"
-	}
-	"Group_Spectator"
-	{
-		"en"	"Spectator"
-	}
-	"Group_Admin"
-	{
-		"en"	"ADMIN"
-	}
 	"Group_Direct"
 	{
 		"en"	"DM"
+	}
+	"Group_Spectator"
+	{
+		"bg"	"Наблюдател"
+		"chi"	"旁观者"
+		"cze"	"Divák"
+		"da"	"Tilskuer"
+		"de"	"Zuschauer"
+		"el"	"Παρατηρητής"
+		"en"	"Spectator"
+		"es"	"Espectador"
+		"fi"	"Katsoja"
+		"fr"	"Spectateur"
+		"hu"	"Néző"
+		"it"	"Spettatore"
+		"jp"	"観戦者"
+		"ko"	"관전자"
+		"nl"	"Toeschouwer"
+		"no"	"Tilskuer"
+		"pl"	"Widz"
+		"pt"	"Espectador"
+		"pt_p"	"Espectador"
+		"ro"	"Spectator"
+		"ru"	"Наблюдатель"
+		"sv"	"Åskådare"
+		"th"	"ผู้สังเกตการณ์"
+		"tr"	"İzleyici"
+		"ua"	"Глядач"
+		"zho"	"觀眾"
+	}
+	"Group_Team"
+	{
+		"bg"	"ОТБОР"
+		"chi"	"团队"
+		"cze"	"TÝM"
+		"da"	"HOLD"
+		"de"	"TEAM"
+		"el"	"ΟΜΑΔΑ"
+		"en"	"TEAM"
+		"es"	"EQUIPO"
+		"fi"	"TIIMI"
+		"fr"	"ÉQUIPE"
+		"hu"	"CSAPAT"
+		"it"	"SQUADRA"
+		"jp"	"チーム"
+		"ko"	"팀"
+		"nl"	"TEAM"
+		"no"	"LAG"
+		"pl"	"DRUŻYNA"
+		"pt"	"EQUIPE"
+		"pt_p"	"EQUIPA"
+		"ro"	"ECHIPĂ"
+		"ru"	"Команде"
+		"sv"	"LAG"
+		"th"	"ทีม"
+		"tr"	"TAKIM"
+		"ua"	"КОМАНДІ"
+		"zho"	"團隊"
+	}
+	"Group_Team1"
+	{
+		"bg"	"ЧЕРВЕНИ"
+		"chi"	"红队"
+		"cze"	"ČERVENÍ"
+		"en"	"RED"
+		"ko"	"레드"
+		"ru"	"КРАСНЫЕ"
+		"ua"	"ЧЕРВОНІ"
+		"zho"	"紅隊"
+	}
+	"Group_Team2"
+	{
+		"bg"	"СИНИ"
+		"chi"	"蓝队"
+		"cze"	"MODŘÍ"
+		"en"	"BLU"
+		"ko"	"블루"
+		"ru"	"СИНИЕ"
+		"ua"	"СИНІ"
+		"zho"	"藍隊"
+	}
+	"Pattern_Clean"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"	"{1} :  {2}"
+	}
+	"Pattern_Group"
+	{
+		"#format"	"{1:s},{2:s},{3:s},{4:s}"
+		"en"	"{1}({2}) {3} :  {4}"
+	}
+	"Pattern_Sendflags"
+	{
+		"#format"	"{1:s},{2:s},{3:s}"
+		"en"	"*{1}* {2} :  {3}"
+	}
+	"Pattern_SendflagsGroup"
+	{
+		"#format"	"{1:s},{2:s},{3:s},{4:s},{5:s}"
+		"en"	"*{1}*{2}({3}) {4} :  {5}"
+	}
+	"Senderflag_Dead"
+	{
+		"bg"	"МЪРТЪВ"
+		"chi"	"死亡"
+		"cze"	"MRTVÝ"
+		"da"	"DØD"
+		"de"	"TOT"
+		"el"	"ΝΕΚΡΟΣ"
+		"en"	"DEAD"
+		"es"	"MUERTO"
+		"fi"	"KUOLLUT"
+		"fr"	"MORT"
+		"hu"	"HALOTT"
+		"it"	"MORTO"
+		"jp"	"死亡"
+		"ko"	"사망"
+		"nl"	"DOOD"
+		"no"	"DØD"
+		"pl"	"NIE ŻYJE"
+		"pt"	"MORTO(A)"
+		"pt_p"	"MORTO"
+		"ro"	"MORT"
+		"ru"	"МЁРТВ"
+		"sv"	"DÖD"
+		"th"	"ตาย"
+		"tr"	"ÖLÜ"
+		"ua"	"МЕРТВИЙ"
+		"zho"	"陣亡"
+	}
+	"Senderflag_Spectator"
+	{
+		"bg"	"НАБЛ"
+		"chi"	"旁观者"
+		"cze"	"DIVÁK"
+		"da"	"TILSK"
+		"de"	"ZUSCHAUER"
+		"el"	"ΠΑΡΑΤ"
+		"en"	"SPEC"
+		"es"	"ESPEC"
+		"fi"	"KATSOJA"
+		"fr"	"SPEC"
+		"hu"	"NÉZŐ"
+		"it"	"SPEC"
+		"jp"	"観戦者"
+		"ko"	"관전자"
+		"nl"	"TOESCH"
+		"no"	"TILSK"
+		"pl"	"WIDZ"
+		"pt"	"ESPEC"
+		"pt_p"	"ESPECTADOR"
+		"ro"	"SPEC"
+		"ru"	"НАБЛЮДАТЕЛЬ"
+		"sv"	"ÅSK"
+		"th"	"ผู้สังเกตการณ์"
+		"tr"	"İZL"
+		"ua"	"ГЛЯДАЧ"
+		"zho"	"旁觀者"
 	}
 }

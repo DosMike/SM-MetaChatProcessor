@@ -40,10 +40,31 @@ typeset ChatMessageCallback {
 	function Action (int& sender, ArrayList recipients, mcpSenderFlag& senderflags, mcpTargetGroup& targetgroup, mcpMessageOption& options, char[] targetgroupColor, char[] name, char[] message);
 	
 	/**
+	 * mcpHookColors:
+	 * Intercept name tagging / coloring
+	 * This is intended to be use to HOOK the processing of coloring the clients name, chat, etc.
+	 * You can set default tag, name and chat color directly! This is meant to change colors in specific cases or for compat plugins!
+	 * The result will be used to format the message as follows:
+	 *  *{flags}*{groupcolor optional}({group}) {nameTag optional} {displayName} : {chatColor}{message}
+	 * 
+	 * @param sender - the client writing this chat message
+	 * @param senderflags - flags on what to contain in the ** string before a chat message
+	 * @param targetgroup - the group that this message is directed to, displayed in () before a chat message
+	 * @param options - some message processing options
+	 * @param nameTag - a tag for the clients name. usually things like [Admin]. Includes colors!
+	 * @param displayName - the name that will be displayed. Includes colors!
+	 * @param chatColor - the default color for this clients chat. Can be a color name (without curlies) or color code. MCP_MAXLENGTH_COLORTAG
+	 * @return Plugin_Handled will block changes, Plugin_Stop will strip colors!
+	 */
+	function Action (int sender, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, char[] nameTag, char[] displayName, char[] chatColor);
+	
+	/**
 	 * mcpHookFormatted:
 	 * Allows you to late manipulate the message on a per-recipient basis, just before it's sent.
 	 * Note: This is only called for messages that were changed previously, as unchanged messages are pass-through and should use valve localizations.
-	 *
+	 * The message is rougly formatted as follows:
+	 *  *{flags}*{groupcolor optional}({group}) {nameTag optional} {displayName} : {chatColor}{message}
+	 * 
 	 * @param sender - the client writing this chat message
 	 * @param recipients - a list of clients receiving this chat message
 	 * @param senderflags - flags on what to contain in the ** string before a chat message
@@ -81,6 +102,11 @@ PrivateForward g_fwdOnMessagePre;
 PrivateForward g_fwdOnMessage_Early;
 PrivateForward g_fwdOnMessage_Normal;
 PrivateForward g_fwdOnMessage_Late;
+/**
+ * Compat forward for when colors are 'applied' to name aka before the format is stiched.
+ * f(sender, senderflags, group, options, &nameTag, &displayName, &chatColor)
+ */
+PrivateForward g_fwdOnMessageColors;
 /* From just chat-processor, before the message is sent. contained the translated & formatted message and called for every target
  * Why does chat-processor allow last minute edits? I don't fully understand
  * f(sender, recipient, sendflags, group, options, buffer, buffersize);
@@ -91,7 +117,7 @@ PrivateForward g_fwdOnMessageFormatted;
  */
 PrivateForward g_fwdOnMessagePost;
 
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max) {
+public void pluginAPI_register() {
 	MarkNativeAsOptional("GetUserMessageType");//so check for protobuf works even if sm is so old this native doesnt exist
 	LoadCompatConfig();
 	
@@ -108,6 +134,11 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("MCP_UnregisterSenderFlags", Native_UnregisterSenderFlag);
 	CreateNative("MCP_UnregisterTargetGroups", Native_UnregisterTargetGroup);
 	CreateNative("MCP_SendChat", Native_SendChat);
+	
+	CreateNative("MCP_SetClientDefaultNamePrefix", Native_SetNamePrefix);
+	CreateNative("MCP_GetClientDefaultNamePrefix", Native_GetNamePrefix);
+	CreateNative("MCP_SetClientDefaultChatColor", Native_SetChatColor);
+	CreateNative("MCP_GetClientDefaultChatColor", Native_GetChatColor);
 	
 	RegPluginLibrary("MetaChatProcessor");
 }
@@ -163,24 +194,32 @@ public void OnAllPluginsLoaded() {
 
 // -------------------- FORWARD WRAPPER --------------------
 
-static void ValidateAfterCall(const char[] stage, int error, Action returnedAction, bool rebuildMessageFormat=false) {
-	if (error != SP_ERROR_NONE)
-		ThrowError("MCP_OnChatMessage%s failed with error code %i", stage, error);
-	if (!IsValidHandle(g_currentMessage.recipients)) {//use is fine: handle.close() is not nulling, so i have to check this was if plugins are bad
-		g_currentMessage.recipients = null;
-		ThrowError("MCP_OnChatMessage%s closed the recipients handle!", stage);
-	} else if (returnedAction == Plugin_Changed && g_currentMessage.recipients.Length==0) {
+/**
+ * Check for no errors, validate recipients and optionally rebuild msg_format string.
+ * will close the recipients handle as that's temporary now
+ */
+static void ValidateAfterCall(const char[] stage, int error, Action returnedAction, ArrayList recipients, bool rebuildMessageFormat=false) {
+	if (recipients != null && !IsValidHandle(recipients)) {//use is fine: handle.close() is not nulling, so i have to check this was if plugins are bad
+		ThrowError("MCP_OnChatMessage%s closed the recipients handle! What are you, mad?", stage);
+	} else if (returnedAction == Plugin_Changed && recipients.Length == 0 && g_currentMessage.recipientCount > 0) {
 		static bool hasWarned;
 		if (!hasWarned) {
 			hasWarned = true;
 			LogError("MCP_OnChatMessage%s cleard the recipients list instead of cancelling - As PluginDev, Please reconsider", stage);
 		}
+		g_currentMessage.recipientCount = 0;
+		delete recipients;
 	} else { //remove doubles
-		g_currentMessage.recipients.Sort(Sort_Ascending, Sort_Integer);
-		for (int i=g_currentMessage.recipients.Length-1; i>0; i-=1) {
-			if (g_currentMessage.recipients.Get(i) == g_currentMessage.recipients.Get(i-1))
-				g_currentMessage.recipients.Erase(i);
+		recipients.Sort(Sort_Ascending, Sort_Integer);
+		for (int i=recipients.Length-1; i>0; i-=1) {
+			if (recipients.Get(i) == recipients.Get(i-1))
+				recipients.Erase(i);
 		}
+		g_currentMessage.SetRecipients(recipients);
+		delete recipients;
+	}
+	if (error != SP_ERROR_NONE) {
+		ThrowError("MCP_OnChatMessage%s failed with error code %i", stage, error);
 	}
 	if (returnedAction == Plugin_Changed && rebuildMessageFormat)
 		BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
@@ -188,18 +227,22 @@ static void ValidateAfterCall(const char[] stage, int error, Action returnedActi
 
 Action Call_OnChatMessagePre() {
 	if (!g_fwdOnMessagePre.FunctionCount) return Plugin_Continue;
+	ArrayList recipients = new ArrayList();
+	g_currentMessage.GetRecipients(recipients);
 	mcpSenderFlag preFlags = g_currentMessage.senderflags;
 	mcpTargetGroup preGroup = g_currentMessage.group;
+	
 	Call_StartForward(g_fwdOnMessagePre);
 	Call_PushCellRef(g_currentMessage.sender);
-	Call_PushCell(g_currentMessage.recipients);
+	Call_PushCell(recipients);
 	Call_PushCellRef(g_currentMessage.senderflags);
 	Call_PushCellRef(g_currentMessage.group);
 	Call_PushCellRef(g_currentMessage.options);
 	Call_PushStringEx(g_currentMessage.customTagColor, sizeof(MessageData::customTagColor), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Action result;
 	int error = Call_Finish(result);
-	ValidateAfterCall("Pre", error, result, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
+	
+	ValidateAfterCall("Pre", error, result, recipients, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
 	return result;
 }
 
@@ -209,11 +252,14 @@ Action Call_OnChatMessage(int stage) {
 	else if (stage > 0) funForward = g_fwdOnMessage_Late;
 	else funForward = g_fwdOnMessage_Normal;
 	if (!funForward.FunctionCount) return Plugin_Continue;
+	ArrayList recipients = new ArrayList();
+	g_currentMessage.GetRecipients(recipients);
 	mcpSenderFlag preFlags = g_currentMessage.senderflags;
 	mcpTargetGroup preGroup = g_currentMessage.group;
+	
 	Call_StartForward(funForward);
 	Call_PushCellRef(g_currentMessage.sender);
-	Call_PushCell(g_currentMessage.recipients);
+	Call_PushCell(recipients);
 	Call_PushCellRef(g_currentMessage.senderflags);
 	Call_PushCellRef(g_currentMessage.group);
 	Call_PushCellRef(g_currentMessage.options);
@@ -222,12 +268,32 @@ Action Call_OnChatMessage(int stage) {
 	Call_PushStringEx(g_currentMessage.message, sizeof(MessageData::message), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Action result;
 	int error = Call_Finish(result);
-	ValidateAfterCall(stage<0?"Early":(stage?"Late":""), error, result, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
+	
+	ValidateAfterCall(stage<0?"Early":(stage?"Late":""), error, result, recipients, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
+	return result;
+}
+
+Action Call_OnChatMessageColors(char[] nameTag, char[] displayName, char[] chatColorTag) {
+	if (!g_fwdOnMessageFormatted.FunctionCount) return Plugin_Continue;
+	
+	Call_StartForward(g_fwdOnMessageFormatted);
+	Call_PushCell(g_currentMessage.sender);
+	Call_PushCell(g_currentMessage.senderflags);
+	Call_PushCell(g_currentMessage.group);
+	Call_PushCell(g_currentMessage.options);
+	Call_PushStringEx(nameTag, MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(displayName, MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(chatColorTag, MAXLENGTH_COLORTAG, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Action result;
+	int error = Call_Finish(result);
+	
+	ValidateAfterCall("Colors", error, result, null);
 	return result;
 }
 
 Action Call_OnChatMessageFormatted(int target, char[] message, int maxlen) {
 	if (!g_fwdOnMessageFormatted.FunctionCount) return Plugin_Continue;
+	
 	Call_StartForward(g_fwdOnMessageFormatted);
 	Call_PushCell(g_currentMessage.sender);
 	Call_PushCell(target);
@@ -238,15 +304,19 @@ Action Call_OnChatMessageFormatted(int target, char[] message, int maxlen) {
 	Call_PushCell(maxlen);
 	Action result;
 	int error = Call_Finish(result);
-	ValidateAfterCall("Formatted", error, result);
+	
+	ValidateAfterCall("Formatted", error, result, null);
 	return result;
 }
 
 void Call_OnChatMessagePost() {
 	if (!g_fwdOnMessagePost.FunctionCount) return;
+	ArrayList recipients = new ArrayList();
+	g_currentMessage.GetRecipients(recipients);
+	
 	Call_StartForward(g_fwdOnMessagePost);
 	Call_PushCell(g_currentMessage.sender);
-	Call_PushCell(g_currentMessage.recipients);
+	Call_PushCell(recipients);
 	Call_PushCell(g_currentMessage.senderflags);
 	Call_PushCell(g_currentMessage.group);
 	Call_PushCell(g_currentMessage.options);
@@ -254,7 +324,8 @@ void Call_OnChatMessagePost() {
 	Call_PushStringEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), SM_PARAM_STRING_UTF8, 0);
 	Call_PushStringEx(g_currentMessage.message, sizeof(MessageData::message), SM_PARAM_STRING_UTF8, 0);
 	int error = Call_Finish();
-	ValidateAfterCall("Post", error, Plugin_Continue);
+	
+	ValidateAfterCall("Post", error, Plugin_Continue, recipients);
 }
 
 // -------------------- NATIVES --------------------
@@ -266,8 +337,9 @@ public int Native_HookChatMessage(Handle plugin, int numParams) {
 		case 1: g_fwdOnMessage_Early.AddFunction(plugin, fun);
 		case 2: g_fwdOnMessage_Normal.AddFunction(plugin, fun);
 		case 3: g_fwdOnMessage_Late.AddFunction(plugin, fun);
-		case 4: g_fwdOnMessageFormatted.AddFunction(plugin, fun);
-		case 5: g_fwdOnMessagePost.AddFunction(plugin, fun);
+		case 4: g_fwdOnMessageColors.AddFunction(plugin, fun);
+		case 5: g_fwdOnMessageFormatted.AddFunction(plugin, fun);
+		case 6: g_fwdOnMessagePost.AddFunction(plugin, fun);
 		default: ThrowNativeError(SP_ERROR_PARAM, "Invalid hook type");
 	}
 }
@@ -312,11 +384,18 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	else if (!(1<=sender<=MaxClients)) ThrowNativeError(SP_ERROR_INDEX, "Invalid client index");
 	g_currentMessage.sender = sender;
 	if (orec == INVALID_HANDLE) {
-		for (int client=1;client<=MaxClients;client++) if (IsClientInGame(client)) g_currentMessage.recipients.Push(client);
+		for (int client=1;client<=MaxClients;client++)
+			if (IsClientInGame(client)) {
+				g_currentMessage.recipients[g_currentMessage.recipientCount] = client;
+				g_currentMessage.recipientCount += 1;
+			}
 	} else {
 		for (int at;at<orec.Length;at++) {
 			int client = orec.Get(at);
-			if (1<=client<=MaxClients && IsClientInGame(client)) g_currentMessage.recipients.Push(client);
+			if (1<=client<=MaxClients && IsClientInGame(client)) {
+				g_currentMessage.recipients[g_currentMessage.recipientCount] = client;
+				g_currentMessage.recipientCount += 1;
+			}
 		}
 	}
 	
