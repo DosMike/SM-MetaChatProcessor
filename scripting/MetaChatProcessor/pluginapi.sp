@@ -6,92 +6,6 @@
 #error Please compile the main file
 #endif
 
-typeset ChatMessageCallback {
-	/**
-	 * mcpHookPre:
-	 * A chat message was just hooked, here you can do dummy default stuff to messages or do early blocking.
-	 *
-	 * @param sender - the client writing this chat message
-	 * @param recipients - a list of clients receiving this chat message
-	 * @param senderflags - flags on what to contain in the ** string before a chat message
-	 * @param targetgroup - the group that this message is directed to, displayed in () before a chat message
-	 * @param options - some message processing options
-	 * @param targetgroupColor - color for the targetgroup, if mcpMsgGrouptagColor is set. Can be a color name (without curlies) or a color code. MCP_MAXLENGTH_COLORTAG
-	 * @return Action as usual, >= Plugin_Handled to prevent sending, Plugin_Changed if you changed a value
-	 */
-	function Action (int& sender, ArrayList recipients, mcpSenderFlag& senderflags, mcpTargetGroup& targetgroup, mcpMessageOption& options, char[] targetgroupColor);
-	
-	/**
-	 * mcpHookEarly,
-	 * mcpHookDefault,
-	 * mcpHookLate:
-	 * Listen for and edit chat messages
-	 * 
-	 * @param sender - the client writing this chat message
-	 * @param recipients - a list of clients receiving this chat message
-	 * @param senderflags - flags on what to contain in the ** string before a chat message
-	 * @param targetgroup - the group that this message is directed to, displayed in () before a chat message
-	 * @param options - some message processing options
-	 * @param targetgroupColor - color for the targetgroup, if mcpMsgGrouptagColor is set. Can be a color name (without curlies) or a color code. MCP_MAXLENGTH_COLORTAG
-	 * @param name - the senders displayname. MCP_MAXLENGTH_NAME
-	 * @param message - the mesage to send. MCP_MAXLENGTH_INPUT
-	 * @return Action as usual, >= Plugin_Handled to prevent sending, Plugin_Changed if you changed a value
-	 */
-	function Action (int& sender, ArrayList recipients, mcpSenderFlag& senderflags, mcpTargetGroup& targetgroup, mcpMessageOption& options, char[] targetgroupColor, char[] name, char[] message);
-	
-	/**
-	 * mcpHookColors:
-	 * Intercept name tagging / coloring
-	 * This is intended to be use to HOOK the processing of coloring the clients name, chat, etc.
-	 * You can set default tag, name and chat color directly! This is meant to change colors in specific cases or for compat plugins!
-	 * The result will be used to format the message as follows:
-	 *  *{flags}*{groupcolor optional}({group}) {nameTag optional} {displayName} : {chatColor}{message}
-	 * 
-	 * @param sender - the client writing this chat message
-	 * @param senderflags - flags on what to contain in the ** string before a chat message
-	 * @param targetgroup - the group that this message is directed to, displayed in () before a chat message
-	 * @param options - some message processing options
-	 * @param nameTag - a tag for the clients name. usually things like [Admin]. Includes colors!
-	 * @param displayName - the name that will be displayed. Includes colors!
-	 * @param chatColor - the default color for this clients chat. Can be a color name (without curlies) or color code. MCP_MAXLENGTH_COLORTAG
-	 * @return Plugin_Handled will block changes, Plugin_Stop will strip colors!
-	 */
-	function Action (int sender, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, char[] nameTag, char[] displayName, char[] chatColor);
-	
-	/**
-	 * mcpHookFormatted:
-	 * Allows you to late manipulate the message on a per-recipient basis, just before it's sent.
-	 * Note: This is only called for messages that were changed previously, as unchanged messages are pass-through and should use valve localizations.
-	 * The message is rougly formatted as follows:
-	 *  *{flags}*{groupcolor optional}({group}) {nameTag optional} {displayName} : {chatColor}{message}
-	 * 
-	 * @param sender - the client writing this chat message
-	 * @param recipients - a list of clients receiving this chat message
-	 * @param senderflags - flags on what to contain in the ** string before a chat message
-	 * @param targetgroup - the group that this message is directed to, displayed in () before a chat message
-	 * @param options - some message processing options
-	 * @param formatted - the fully formatted message as about to be sent. MCP_MAXLENGTH_NETMESSAGE
-	 * @return Action as usual, >= Plugin_Handled to prevent sending, Plugin_Changed if you changed a value
-	 */
-	function Action (int sender, int recipient, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, char[] formatted);
-	
-	/**
-	 * mcpHookPost
-	 * This chat message was sent to the recipients. The message may not be 100% accurate if changed in the *Formatted hook.
-	 *
-	 * @param sender - the client writing this chat message
-	 * @param recipients - a list of clients receiving this chat message
-	 * @param senderflags - flags on what to contain in the ** string before a chat message
-	 * @param targetgroup - the group that this message is directed to, displayed in () before a chat message
-	 * @param options - some message processing options
-	 * @param targetgroupColor - color for the targetgroup, if mcpMsgGrouptagColor is set. Can be a color name (without curlies) or a color code. MCP_MAXLENGTH_COLORTAG
-	 * @param name - the senders displayname. MCP_MAXLENGTH_NAME
-	 * @param message - the mesage to send. MCP_MAXLENGTH_INPUT
-	 * @noreturn
-	 */
-	function void (int sender, ArrayList recipients, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, const char[] targetgroupColor, const char[] name, const char[] message);
-}
-
 /** Early inspection like cider chat processor, originally intended to mainly manipulate visibility for other plugin 
  * f(&sender, recipients, &sendflags, &group, &options)
  */
@@ -281,9 +195,9 @@ Action Call_OnChatMessageColors(char[] nameTag, char[] displayName, char[] chatC
 	Call_PushCell(g_currentMessage.senderflags);
 	Call_PushCell(g_currentMessage.group);
 	Call_PushCell(g_currentMessage.options);
-	Call_PushStringEx(nameTag, MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushStringEx(displayName, MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushStringEx(chatColorTag, MAXLENGTH_COLORTAG, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(nameTag, MCP_MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(displayName, MCP_MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(chatColorTag, MCP_MAXLENGTH_COLORTAG, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Action result;
 	int error = Call_Finish(result);
 	
@@ -418,4 +332,38 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	g_currentMessage.valid = true;
 	g_currentMessage.changed = true; //force resend
 	ProcessSayText2();
+}
+
+public int Native_SetNamePrefix(Handle plugin, int numParams) {
+	int client = GetNativeCell(1);
+	if (1<=client<=MaxClients && IsClientConnected(client))
+		GetNativeString(2, clientNamePrefix[client], sizeof(clientNamePrefix[]));
+	else
+		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+}
+
+public int Native_GetNamePrefix(Handle plugin, int numParams) {
+	int client = GetNativeCell(1);
+	int maxlen = GetNativeCell(3);
+	if (1<=client<=MaxClients && IsClientConnected(client))
+		SetNativeString(2, clientNamePrefix[client], maxlen);
+	else
+		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+}
+
+public int Native_SetChatColor(Handle plugin, int numParams) {
+	int client = GetNativeCell(1);
+	if (1<=client<=MaxClients && IsClientConnected(client))
+		GetNativeString(1, clientChatColor[client], sizeof(clientChatColor[]));
+	else
+		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+}
+
+public int Native_GetChatColor(Handle plugin, int numParams) {
+	int client = GetNativeCell(1);
+	int maxlen = GetNativeCell(3);
+	if (1<=client<=MaxClients && IsClientConnected(client))
+		SetNativeString(2, clientChatColor[client], maxlen);
+	else
+		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
 }

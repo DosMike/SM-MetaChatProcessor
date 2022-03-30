@@ -3,6 +3,8 @@
 #include <sourcemod>
 #include <multicolors>
 
+//#include <profiler>
+
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -16,72 +18,20 @@ public Plugin myinfo = {
 	url = "http://forums.alliedmods.net"
 };
 
-/**
- * As defined in SCP Redux
- */
-#define SENDER_WORLD			0
-#define MAXLENGTH_NATIVECOLOR	12		//actually 9: \x08rrggbbaa, but for a bit of a buffer, let's say 12
-#define MAXLENGTH_COLORTAG		32
-#define MAXLENGTH_TRANPHRASE	64
-#define MAXLENGTH_INPUT			192 	// Inclues \0. The size of the chat input box is 128. This is a bit longer than the chat box to allow plugins inserting long color namewhen formatting, as those might collapse when parsed.
-#define MAXLENGTH_NAME			128		// This is backwards math to get compability.  Sourcemod has it set at 32, but there is room for more.
-#define MAXLENGTH_MESSAGE		256		// This is based upon the SDK and the length of the entire message, including tags, name, : etc.
-
-/**
- * Sender flags appear before the chat entry in asterisks: *DEAD*
- * Their purpose is to give more information about the senders status.
- * These are bitflags and can be combined in mcp, even if not originally supported.
- *
- * Note: These flags are for formatting only, the recipients list is still relevant!
- */
-enum mcpSenderFlag (<<=1) {
-	mcpSenderNone      = 0,
-	mcpSenderDead      = 1, /* the sender is currently dead */
-	mcpSenderSpectator = 2, /* the sender is specating */
-	/* other values should be treated as custom, not invalid */
-}
-
-/**
- * Target groups appear in paranthesis before the chat entry: (TEAM)
- * Their purpose is to tell you who can read this message.
- * Ordering is choosen deliberately so GetClientTeam should match spec...team4
- *
- * Note: These flags are for formatting only, the recipients list is still relevant!
- */
-enum mcpTargetGroup {
-	mcpTargetNone         = 0, /* hide the group */
-	mcpTargetSpecator     = 1, /* spectator intern chat, e.g. (Spectator) */
-	mcpTargetTeam1        = 2, /* chat for team 1 (index 2), e.g. (Terrorist) */
-	mcpTargetTeam2        = 3, /* chat for team 2 (index 3), e.g. (Counter-Terrorist) */
-	mcpTargetTeam3        = 4, /* chat for team 3 (index 4) */
-	mcpTargetTeam4        = 5, /* chat for team 4 (index 5) */
-	mcpTargetTeamSender   = 6, /* sender team, e.g. (TEAM) */
-	mcpTargetAll          = 7, /* Non-standard special highlighted /chat or @message, e.g. (ALL) */
-	mcpTargetAdmin        = 8, /* Non-standard special admin chat, e.g. (ADMIN) */
-	mcpTargetDirect       = 9, /* Non-standard special private message, e.g. (DM) */
-	/* other values should be treated as custom, not invalid */
-}
-
-enum mcpMessageOption (<<=1) {
-	mcpMsgDefault         = 0, // white *flag* and (group), allow colors in name and message. Not that default also means the message gets copied to console
-	mcpMsgProcessColors   = 1, //This message should process color templates like {Red} -> intended to give plugins multicolor support
-	mcpMsgRemoveColors    = 2, //This message should remove colos including \x07RRGGBB -> intended to clean input
-	mcpMsgGrouptagColor   = 4, //This message has a custom group tag color set
-	mcpMsgIgnoreNameColor = 8, //The group tag color will replace tag and name color
-	mcpMsgNoConsoleCopy   = 16, //The message will only print to chat, and not to console
-}
+#include "include/metachatprocessor/types.inc"
+#define MCP_MAXLENGTH_NATIVECOLOR	12		// actually 10: \x08rrggbbaa\0, but 12 bytes is 3 cells
 
 bool g_bUseProtobuf;
 bool g_bIsSource2009;
 bool g_bIsCSGOColors;
 
 int g_teamColorMode; //use \x03 for author team color or not
-char g_teamColors[6][MAXLENGTH_NATIVECOLOR]; //manual team colors for unassigned...team4
+char g_teamColors[6][MCP_MAXLENGTH_NATIVECOLOR]; //manual team colors for unassigned...team4
 int g_msgNameTagCount; //team name tags for msg_format
-char g_msgNameTags[4][MAXLENGTH_COLORTAG]; 
+char g_msgNameTags[4][32]; //arbitrary short buffer that can contain a format suffix for msg_name (e.g. _survivor)
 
-char clientNamePrefix[MAXPLAYERS+1][MAXLENGTH_NAME];
-char clientChatColor[MAXPLAYERS+1][MAXLENGTH_COLORTAG];
+char clientNamePrefix[MAXPLAYERS+1][MCP_MAXLENGTH_NAME];
+char clientChatColor[MAXPLAYERS+1][MCP_MAXLENGTH_COLORTAG];
 
 enum mcpCompatibility (<<=1) {
 	mcpCompatNone     = 0,
@@ -99,21 +49,21 @@ bool g_fixCompatPostCalls = true; //always call OnChatMessagePost for scp?
 
 enum struct ExternalPhrase {
 	Handle plugin;
-	char string[MAXLENGTH_TRANPHRASE];
+	char string[MCP_MAXLENGTH_TRANPHRASE];
 }
 
 enum struct MessageData {
 	bool valid;
 	bool changed;
 	int sender;
-	char msg_name[MAXLENGTH_COLORTAG];
+	char msg_name[MCP_MAXLENGTH_TRANPHRASE]; //Cstrike_Chat_AllSpec like stuff from resources/game_locale.txt
 	mcpSenderFlag senderflags;
 	mcpTargetGroup group;
 	mcpMessageOption options;
-	char customTagColor[MAXLENGTH_COLORTAG]; //name or literal color
-	char sender_name[MAXLENGTH_NAME];
-	char sender_display[MAXLENGTH_NAME];
-	char message[MAXLENGTH_INPUT];
+	char customTagColor[MCP_MAXLENGTH_COLORTAG]; //name or literal color
+	char sender_name[MCP_MAXLENGTH_NAME]; //should be equal to %N
+	char sender_display[MCP_MAXLENGTH_NAME]; //normally ends up as \x03%N
+	char message[MCP_MAXLENGTH_INPUT];
 	
 	int recipientCount;
 	int recipients[MAXPLAYERS];
@@ -125,9 +75,9 @@ enum struct MessageData {
 		this.group = mcpTargetNone;
 		this.options = mcpMsgDefault;
 		int i;
-		for (;i<MAXLENGTH_COLORTAG;i++) this.msg_name[i] = this.sender_name[i] = this.customTagColor[i] = this.sender_display[i] = this.message[i] = 0;
-		for (;i<MAXLENGTH_NAME;i++) this.sender_name[i] = this.sender_display[i] = this.message[i] = 0;
-		for (;i<MAXLENGTH_INPUT;i++) this.message[i] = 0;
+		for (;i<MCP_MAXLENGTH_COLORTAG;i++) this.msg_name[i] = this.sender_name[i] = this.customTagColor[i] = this.sender_display[i] = this.message[i] = 0;
+		for (;i<MCP_MAXLENGTH_NAME;i++) this.sender_name[i] = this.sender_display[i] = this.message[i] = 0;
+		for (;i<MCP_MAXLENGTH_INPUT;i++) this.message[i] = 0;
 		this.recipientCount=0;
 	}
 	void SetRecipients(ArrayList list) {
@@ -161,7 +111,7 @@ ArrayList g_groupTranslations;
 ArrayList g_senderflagTranslations;
 
 /** module includes that may rely on globals */
-#include "MetaChatCommon/utilities.inc"
+#include "metachatprocessor/strings.sp"
 #include "MetaChatProcessor/utilities.sp"
 #include "MetaChatProcessor/pluginapi.sp"
 #include "MetaChatProcessor/compat_scpredux.sp"
@@ -217,6 +167,7 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	g_currentMessage.sender = buf.ReadInt("ent_idx");
 	if (!g_currentMessage.sender) return Plugin_Continue;
 	g_currentMessage.options = buf.ReadBool("chat") ? mcpMsgDefault : mcpMsgNoConsoleCopy;
+	g_currentMessage.options |= mcpMsgRemoveColors; //by default the game does not allow colors
 	buf.ReadString("msg_name", g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	
 	buf.ReadString("params", g_currentMessage.sender_name, sizeof(MessageData::sender_name), 0);
@@ -243,6 +194,7 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	g_currentMessage.sender = msg.ReadByte();
 	if (!g_currentMessage.sender) return Plugin_Continue;
 	g_currentMessage.options = msg.ReadByte() ? mcpMsgDefault : mcpMsgNoConsoleCopy;
+	g_currentMessage.options |= mcpMsgRemoveColors; //by default the game does not allow colors
 	
 	msg.ReadString(g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.sender_name, sizeof(MessageData::sender_name));
@@ -261,16 +213,36 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
 	g_currentMessage.valid = true;
-	return ProcessSayText2();
+	
+//	Profiler profiler = new Profiler();
+//	profiler.Start();
+	
+	Action result = ProcessSayText2();
+	
+//	profiler.Stop();
+//	float time = profiler.Time;
+//	float ticks = time * 100.0 / GetTickInterval();
+//	PrintToServer("MCP PreProcessing took %.3f ms / %f%% ticks", time*1000.0, ticks);
+//	delete profiler;
+	return result;
 }
 
 Action ProcessSayText2() {
 	Action result;
 	
+	//kill empty messages. should we do this as chat processor?
+	//A strlen 0 message is not sent, so I'd say this is intended default behaviour
+	{	char tmp[MCP_MAXLENGTH_INPUT];
+		strcopy(tmp, sizeof(tmp), g_currentMessage.message);
+		if (TrimStringMB(tmp) && tmp[0]==0)
+			return Plugin_Handled; //message is empty or a "break chat" message
+	}
+	
 	//primitive pre hook
 	result = Call_OnChatMessagePre();
 	if (result >= Plugin_Handled) return Plugin_Handled;
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
+	
 	
 	if (g_currentMessage.options & mcpMsgRemoveColors) {
 		RemoveTextColors(g_currentMessage.sender_display, sizeof(MessageData::sender_display), false);
@@ -304,18 +276,27 @@ public void OnGameFrame() {
 		// process message
 		//if this failes we hopefully threw an error and will continue processing
 		//other messages in the next game tick, as this one was already dequeued
+//		Profiler profiler = new Profiler();
+//		profiler.Start();
+		
 		if (g_currentMessage.changed) ResendChatMessage();
 		Call_OnChatMessagePost();
+		
+//		profiler.Stop();
+//		float time = profiler.Time;
+//		float ticks = time * 100.0 / GetTickInterval();
+//		PrintToServer("MCP PostProcessing took %.3f ms / %f%% ticks", time*1000.0, ticks);
+//		delete profiler;
 	}
 }
 
 static void ResendChatMessage() {
-	char message[MAXLENGTH_MESSAGE];
+	char message[MCP_MAXLENGTH_MESSAGE];
 	
-	ArrayList tFlags = new ArrayList(ByteCountToCells(MAXLENGTH_TRANPHRASE));
-	char tGroup[MAXLENGTH_TRANPHRASE];
-	char tGroupColor[MAXLENGTH_COLORTAG];
-	char sEffectiveName[MAXLENGTH_NAME];
+	ArrayList tFlags = new ArrayList(ByteCountToCells(MCP_MAXLENGTH_TRANPHRASE));
+	char tGroup[MCP_MAXLENGTH_TRANPHRASE];
+	char tGroupColor[MCP_MAXLENGTH_COLORTAG];
+	char sEffectiveName[MCP_MAXLENGTH_NAME];
 	int template = PrepareChatFormat(tFlags, tGroup, sizeof(tGroup), tGroupColor, sizeof(tGroupColor), sEffectiveName, sizeof(sEffectiveName));
 	bool chatFlag = !(g_currentMessage.options & mcpMsgNoConsoleCopy);
 	
@@ -389,7 +370,7 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 	
 	for (int i=0, f=g_currentMessage.senderflags; i<32 && i<g_senderflagTranslations.Length && f; i+=1, f>>=1) {
 		if ((f&1)==0) continue;
-		char buffer[MAXLENGTH_TRANPHRASE];
+		char buffer[MCP_MAXLENGTH_TRANPHRASE];
 		if (GetNthPhrase(g_senderflagTranslations, i, buffer, sizeof(buffer))) {
 			tFlags.PushString(buffer);
 		}
@@ -466,9 +447,9 @@ static void FormatChatMessage(int client, char[] message, int maxlen, int templa
 }
 /** @return true on changes */
 bool FinalizeChatColors() {
-	char namePrefix[MAXLENGTH_NAME];
-	char displayName[MAXLENGTH_NAME];
-	char chatColor[MAXLENGTH_COLORTAG];
+	char namePrefix[MCP_MAXLENGTH_NAME];
+	char displayName[MCP_MAXLENGTH_NAME];
+	char chatColor[MCP_MAXLENGTH_COLORTAG];
 	strcopy(namePrefix, sizeof(namePrefix), clientNamePrefix[g_currentMessage.sender]);
 	strcopy(displayName, sizeof(displayName), g_currentMessage.sender_display);
 	strcopy(chatColor, sizeof(chatColor), clientChatColor[g_currentMessage.sender]);
@@ -489,7 +470,7 @@ bool FinalizeChatColors() {
 		CFormatColor(namePrefix, sizeof(namePrefix), g_currentMessage.sender);
 		CFormatColor(displayName, sizeof(displayName), g_currentMessage.sender);
 	}
-	char colTagEnd[MAXLENGTH_COLORTAG];
+	char colTagEnd[MCP_MAXLENGTH_NATIVECOLOR];
 	//was the name formatted? does the name tag spill color onto the name?
 	if (StrEqual(g_currentMessage.sender_name, displayName) && !GetStringColor(namePrefix, colTagEnd, sizeof(colTagEnd), true)) {
 		//no color for the name at all? add team color

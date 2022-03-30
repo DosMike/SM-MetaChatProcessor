@@ -1,7 +1,28 @@
-#if defined _metachatcommon_utilities
+/**
+ * Most of the functions in this script are related to strings and string colors
+ * and should be reusable with minimum effort (g_bIsCSGOColors can be replaced
+ * with GetEngineVersion()==Engine_CSGO)
+ *
+ * Function overview:
+ * ParseChatColor - Read color native at input[0] if < 32 or resolve input as color name
+ * GetNativeColor - Read a color native at the given position, if present
+ * RemoveTextColors - Remove color natives and optionally color tags from input
+ * StringStartsWithColor - Skip-space (32) looking for control characters
+ * GetStringColor - Search color before or after text
+ * GetCodePoint - Reads a UTF8 Multibyte character codepoint from the first byte
+ * GetPreviousCharMB - Utility to reverse seek through MB strings
+ * IsCharMBSpace - Checks for Multibyte space characters at the given position
+ * TrimStringMB - Trims Multibyte space characters of a buffer
+ * copyNchars - Does offset math to strcopy for you
+ * CollapseColors - Remove redundant colors from a string
+ */
+#if defined _mcp_strings
 #endinput
 #endif
-#define _metachatcommon_utilities
+#define _mcp_strings
+#if !defined _MetaChatProcessor_
+#error Please compile the main file
+#endif
 
 #include <morecolors>
 
@@ -17,7 +38,7 @@
  * @param maxsize - size of output buffer
  * @return true if the color seemd valid and output was set.
  */
-stock bool ParseChatColor(const char[] color, char[] output, int maxsize, int author) {
+bool ParseChatColor(const char[] color, char[] output, int maxsize, int author) {
 	if (!color[0]) return false;
 	//control character == native color
 	if( (GetEngineVersion() == Engine_CSGO && 0 < color[0] <= 0x10) || 
@@ -51,83 +72,6 @@ stock bool ParseChatColor(const char[] color, char[] output, int maxsize, int au
 	return false;
 }
 
-/** 
- * Removes all color tags and color codes from a message as well as other control
- * characters that probably don't belong there.
- * Fun fact: TF2 removes colors from msg_name parameters by replacing code bytes 
- * (7 bytes for \x07, 9 bytes for \x09) with \x01, but I don't know on what end
- * 
- * @param message - the message to process
- * @param maxsize - the max buffer size
- * @param removeTags - remove color tags
- * @return true if changed
- */
-stock bool RemoveTextColors(char[] message, int maxsize, bool removeTags=true) {
-	int strlenStart = strlen(message);
-	if (removeTags) CRemoveTags(message, maxsize);
-	int read,write;
-	if (GetEngineVersion()==Engine_CSGO) {
-		for (;message[read] && read < maxsize;read+=1) {
-			if (0 < message[read] <= 0x32) continue; //just skip all control chars, they have no business here
-			if (read!=write)
-				message[write] = message[read];
-			write+=1;
-		}
-	} else {
-		for (;message[read] && read < maxsize;read+=1) {
-			if (message[read]==7) { read+=6; continue; } //skip following RRGGBB as well
-			else if (message[read]==8) { read+=8; continue; } //skip following RRGGBBAA as well
-			else if (0 < message[read] <= 0x32) continue; //just skip all control chars, they have no business here
-			if (read!=write)
-				message[write] = message[read];
-			write+=1;
-		}
-	}
-	if (read!=write) {//changed
-		//move 0 terminator as well; max index is at size-1
-		if (write < maxsize-1) message[write]=0;
-		else message[maxsize-1] = 0; //safety
-	}
-	return read == strlenStart;
-}
-
-
-/** @return index to color char or -1 */
-stock int StringStartsWithColor(const char[] buffer) {
-	int at=0;
-	for (;buffer[at] != 0;at+=1) {
-		if (0x01 <= buffer[at] < ' ')
-			return at;
-		else if (buffer[at] > ' ')
-			return -1;
-	}
-	return -1;
-}
-/**
- * normal mode gets the color only if it is in from of any printable characters (>32)
- * post mode is intended to get the color a concatinated string would inherit
- */
-stock bool GetStringColor(const char[] buffer, char[] color, int bufsize, bool post=false) {
-	int at=-1;
-	if (post) {
-		for (int i=strlen(buffer)-1; i>=0; i-=1) {
-			if (buffer[i] < ' ') {
-				at=i;break;
-			}
-		}
-	} else {
-		at = StringStartsWithColor(buffer);
-	}
-	if (at < 0) return false;
-	if (g_bIsCSGOColors || buffer[at] < 7 || 8 < buffer[at] < ' ' ) {
-		strcopy(color, 2>bufsize?bufsize:2, buffer[at]);
-	} else if (buffer[at] == 7) {
-		strcopy(color, 8>bufsize?bufsize:8, buffer[at]);
-	} else if (buffer[at] == 7) {
-		strcopy(color, 8>bufsize?bufsize:8, buffer[at]);
-	} else ThrowError("Invalid color at character");
-	return true;
-}
 
 /**
  * Get the native color code at the start of the given buffer
@@ -136,7 +80,7 @@ stock bool GetStringColor(const char[] buffer, char[] color, int bufsize, bool p
  * @param maxlen - output size
  * @return length of color code or 0 if not a color
  */
-stock int GetNativeColor(const char[] buffer, char out[]="", int maxlen=0) {
+int GetNativeColor(const char[] buffer, char out[]="", int maxlen=0) {
 	if (buffer[0] == 0) { //not a color
 		return 0;
 	} else if (buffer[0]<=0x10 && g_bIsCSGOColors) { //csgo colors
@@ -156,11 +100,81 @@ stock int GetNativeColor(const char[] buffer, char out[]="", int maxlen=0) {
 	}
 }
 
+/** 
+ * Removes all color tags and color codes from a message as well as other control
+ * characters that probably don't belong there.
+ * Fun fact: TF2 removes colors from msg_name parameters by replacing code bytes 
+ * (7 bytes for \x07, 9 bytes for \x09) with \x01, but I don't know on what end
+ * 
+ * @param message - the message to process
+ * @param maxsize - the max buffer size
+ * @param removeTags - remove color tags
+ * @return true if changed
+ */
+bool RemoveTextColors(char[] message, int maxsize, bool removeTags=true) {
+	int strlenStart = strlen(message);
+	if (removeTags) CRemoveTags(message, maxsize);
+	int read,write;
+	if (GetEngineVersion()==Engine_CSGO) {
+		for (;message[read] && read < maxsize;read+=1) {
+			if (0 < message[read] <= 0x10) continue; //skip all colors
+			if (read!=write)
+				message[write] = message[read];
+			write+=1;
+		}
+	} else {
+		for (;message[read] && read < maxsize;read+=1) {
+			if (message[read] == 7) { read+=6; continue; } //skip following RRGGBB as well
+			else if (message[read] == 8) { read+=8; continue; } //skip following RRGGBBAA as well
+			else if (0 < message[read] <= 6) continue; //skip all simple colors
+			if (read!=write)
+				message[write] = message[read];
+			write+=1;
+		}
+	}
+	if (read!=write) {//changed
+		//move 0 terminator as well; max index is at size-1
+		if (write < maxsize-1) message[write]=0;
+		else message[maxsize-1] = 0; //safety
+	}
+	return read == strlenStart;
+}
+
+
+/** @return index to color char or -1 */
+int StringStartsWithColor(const char[] buffer) {
+	int at=0,w;
+	for (;buffer[at] != 0;) {
+		if (GetNativeColor(buffer[at])) return at;
+		else if (buffer[at]<=32) at += 1; //these wont print, so we can skip em
+		else if (IsCharMBSpace(buffer[at],w)) at += w;
+		else return -1;
+	}
+	return -1;
+}
+/**
+ * normal mode gets the color only if it is in front of any printable characters (>32)
+ * post mode is intended to get the color a concatinated string would inherit
+ */
+bool GetStringColor(const char[] buffer, char[] color, int bufsize, bool post=false) {
+	if (post) {
+		for (int i=strlen(buffer)-1; i>=0; i-=1) {
+			if (GetNativeColor(buffer[i], color, bufsize)) {
+				return true;
+			}
+		}
+		return false;
+	} else {
+		int at;
+		return ((at = StringStartsWithColor(buffer))>=0 && GetNativeColor(buffer[at], color, bufsize));
+	}
+}
+
 /**
  * @param bytes, width of the character returned, 0 for broken MB chars
  * @return codepoint or 0 if a MB character is broken
  */
-stock int GetCodePoint(const char[] buffer, int& bytes=0) {
+int GetCodePoint(const char[] buffer, int& bytes=0) {
 	int cp;
 	if ((buffer[0]&0x80)==0x00) { bytes=1; return buffer[0]; } //ASCII character
 	//look for multi byte headers
@@ -179,6 +193,17 @@ stock int GetCodePoint(const char[] buffer, int& bytes=0) {
 	return cp;
 }
 /**
+ * Retrieve the index of the previous UTF8 char. If within MB char, seeks to start
+ * of character.
+ */
+int GetPreviousCharMB(const char[] buffer, int offset) {
+	if (offset < 1) return 0;
+	int pos=offset-1;
+	if ((buffer[pos]&0x80)==0x00) return pos; //ascii char
+	while (pos && ((buffer[pos]&0xC0)==0x80)) pos-=1; //rev continuations
+	return pos;
+}
+/**
  * Check the next codepoint for a space, return the width of the space if true.
  * Might look like a wtf moment, but TF2 acutally renders e.g. EM-Spaces correctly.
  * @param buffer - charptr[at] for utf8 string (sm default)
@@ -189,7 +214,7 @@ stock int GetCodePoint(const char[] buffer, int& bytes=0) {
  *  here https://docs.microsoft.com/de-de/dotnet/api/system.char.iswhitespace?view=net-6.0
  *  line separators, paragraph separators and control characters (<32) are ignored (false).
  */
-stock bool IsCharMBSpace(const char[] buffer, int& bytes=0, bool countNonSpaces=true) {
+bool IsCharMBSpace(const char[] buffer, int& bytes=0, bool countNonSpaces=true) {
 	switch (GetCodePoint(buffer, bytes)) {
 		case 0x20, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 
 			0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 
@@ -202,32 +227,38 @@ stock bool IsCharMBSpace(const char[] buffer, int& bytes=0, bool countNonSpaces=
 		default: return false;
 	}
 }
-stock bool TrimStringMB(char[] buffer) {
+/** @return true if changed */
+bool TrimStringMB(char[] buffer) {
 	int inlen=strlen(buffer), from, to, tmp, tmp2;
 	//find first non-space
 	while (buffer[from] && IsCharMBSpace(buffer[from], tmp) && tmp) {
 		from += tmp;
 	}
 	//find last non-space
-	tmp2 = from;
-	while (buffer[tmp2]) {
-		if (!IsCharMBSpace(buffer[tmp2], tmp)) {
-			to = tmp2+tmp; //from + char width -> to = post
-		} else if (!tmp) break;
-		tmp2 += tmp;
-	}
+	tmp = inlen; //starts post!
+	to = inlen; //assume no space at end
+	do {
+		tmp = GetPreviousCharMB(buffer, tmp);
+		if (IsCharMBSpace(buffer[tmp], tmp2) && tmp2) to = tmp;
+		else break;
+	} while (to>from);
 	//cut
 	int len=to-from;//+\0
 	if (len <= 0) buffer[0]=0; //nothing remains
-	if (len>inlen) len=inlen; //how did we get here?
-	Format(buffer, len+1, "%s", buffer[from]);
+	if (len>inlen) ThrowError("Unexpected string expansion"); //how did we get here?
+	if (len != inlen) {
+		char[] trimmed = new char[len+1];
+		strcopy(trimmed, len+1, buffer[from]);//make a trimmed copy
+		strcopy(buffer, inlen+1, trimmed); //copy back, has to have had at least inlen+1 bytes size
+		return true;
+	} else return false;
 }
 /** 
  * source length is unchecked!
  * copy up to length number of bytes from source[sourceoffset] to dest[destoffset], accounting for destsize
  * @return number of bytes copied
  */
-stock int copyNchars(char[] dest, int destsize, int destoffset, const char[] source, int sourceoffset, int length) {
+int copyNchars(char[] dest, int destsize, int destoffset, const char[] source, int sourceoffset, int length) {
 	int maxlen = destsize-destoffset-1;
 	if (maxlen <= 0 || length <= 0) return 0;
 	if (length > maxlen) length = maxlen;
@@ -241,12 +272,12 @@ stock int copyNchars(char[] dest, int destsize, int destoffset, const char[] sou
  * This is to save bytes for the already limited space, even processing and 
  * skipping over non-ascii spaces.
  */
-stock void CollapseColors(char[] buffer, int maxsize) {
+void CollapseColors(char[] buffer, int maxsize) {
 	//for checks i guess
 	int len = strlen(buffer);
 	//white space buffer
 	int wswrite;
-	char spaces[MAXLENGTH_INPUT];
+	char spaces[MCP_MAXLENGTH_INPUT];
 	//last found color
 	bool cflag;
 	char color[12];

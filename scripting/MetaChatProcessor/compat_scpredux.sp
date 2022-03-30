@@ -46,8 +46,8 @@ Action MCP_SCP_OnChatMessage(int& sender, ArrayList recipients, mcpSenderFlag& s
 	Call_StartForward(scp_fwdOnMessage);
 	Call_PushCellRef(sender);
 	Call_PushCell(recipients);
-	Call_PushStringEx(name, MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushStringEx(message, MAXLENGTH_INPUT, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(name, MCP_MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(message, MCP_MAXLENGTH_INPUT, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Action result;
 	int error = Call_Finish(result);
 	if (error != SP_ERROR_NONE) ThrowError("[MCP] SCP OnChatMessage call failed with code %i", error);
