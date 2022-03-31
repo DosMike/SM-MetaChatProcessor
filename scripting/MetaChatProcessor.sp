@@ -160,6 +160,16 @@ public void OnPluginStart() {
 	
 }
 
+public bool OnClientConnect(int client, char[] rejectmsg, int maxlen) {
+	//reset client data very early, so other plugins can load/set their defaults
+	// on client connected as usual. I know that this will poke stuff even when
+	// the clients cancel their connection attempt, but this is not doing a lot.
+	
+	strcopy(clientNamePrefix[client], sizeof(clientNamePrefix[]), ""); //use game default method to color name
+	strcopy(clientChatColor[client], sizeof(clientChatColor[]), ""); //whatever the format is using
+}
+
+
 public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	// collect the message
 	Protobuf buf = UserMessageToProtobuf(msg);

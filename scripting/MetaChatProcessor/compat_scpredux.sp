@@ -6,6 +6,8 @@
 #error Please compile the main file
 #endif
 
+#define MCP_SCP_PLUGIN_VERSION "2.3.0 MCP"
+
 /* scp compat */
 //#define SCP_CHATFLAGS_INVALID		0
 //#define SCP_CHATFLAGS_ALL			(1 << 0)
@@ -22,7 +24,17 @@ void mcp_scp_init() {
 	RegPluginLibrary("scp");
 }
 
+public void mcp_scp_OnCVarChanged_Version(ConVar convar, const char[] oldValue, const char[] newValue) {
+	char value[32];
+	convar.GetString(value, sizeof(value));
+	if (!StrEqual(value, MCP_SCP_PLUGIN_VERSION)) convar.SetString(MCP_SCP_PLUGIN_VERSION);
+}
 void mcp_scp_start() {
+	ConVar version = CreateConVar("scp_version", MCP_SCP_PLUGIN_VERSION, "Plugin Version", FCVAR_DONTRECORD|FCVAR_NOTIFY|FCVAR_CHEAT);
+	version.AddChangeHook(mcp_scp_OnCVarChanged_Version);
+	mcp_scp_OnCVarChanged_Version(version,"","");
+	delete version;
+	
 	scp_fwdOnMessage = CreateGlobalForward("OnChatMessage", ET_Hook, Param_CellByRef, Param_Cell, Param_String, Param_String);
 	scp_fwdOnMessagePost = CreateGlobalForward("OnChatMessage_Post", ET_Ignore, Param_Cell, Param_Cell, Param_String, Param_String);
 }
