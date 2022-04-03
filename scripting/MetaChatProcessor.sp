@@ -1,14 +1,29 @@
 #define _MetaChatProcessor_
 
 #include <sourcemod>
+
+// the decision logic in multicolors will slow some aspects a tiny bit.
+// if you really wanna squeeze out the last bit of performance for color processing,
+// you might want to replace this with the game specific library instead.
+// (color.inc for csgo, morecolors.inc for source 2009 games)
+// why is this even here? i think processing and more importantly suppressing
+// the well known color format codes in the chat processor is an ok option to have.
 #include <multicolors>
 
 //#include <profiler>
+//	Profiler profiler = new Profiler();
+//	profiler.Start();
+	
+//	profiler.Stop();
+//	float time = profiler.Time;
+//	float ticks = time * 100.0 / GetTickInterval();
+//	PrintToServer("MCP PreProcessing took %.3f ms / %f%% ticks", time*1000.0, ticks);
+//	delete profiler;
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w12a"
+#define PLUGIN_VERSION "22w13a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -223,18 +238,7 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
 	g_currentMessage.valid = true;
-	
-//	Profiler profiler = new Profiler();
-//	profiler.Start();
-	
-	Action result = ProcessSayText2();
-	
-//	profiler.Stop();
-//	float time = profiler.Time;
-//	float ticks = time * 100.0 / GetTickInterval();
-//	PrintToServer("MCP PreProcessing took %.3f ms / %f%% ticks", time*1000.0, ticks);
-//	delete profiler;
-	return result;
+	return ProcessSayText2();
 }
 
 Action ProcessSayText2() {
@@ -248,35 +252,35 @@ Action ProcessSayText2() {
 			return Plugin_Handled; //message is empty or a "break chat" message
 	}
 	
-	//primitive pre hook
+	//mcpHookPre
 	result = Call_OnChatMessagePre();
 	if (result >= Plugin_Handled) return Plugin_Handled;
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
-	
+	//remove native colors from user input, keeping tags for maybe processing?
 	if (g_currentMessage.options & mcpMsgRemoveColors) {
 		RemoveTextColors(g_currentMessage.sender_display, sizeof(MessageData::sender_display), false);
 		//^ changes in display name will be picked up later
 		g_currentMessage.changed |= RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
 	}
 	
-	//processing message hooks
+	//processing message hooks (early, normal, late)
 	for (int i=-1;i<=1;i++) {
 		result = Call_OnChatMessage(i);
 		if (result >= Plugin_Handled) return Plugin_Handled;
 		else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	}
 	
-	//process colors
+	//process colors. this applies prefix and colors if not already done
 	g_currentMessage.changed |= FinalizeChatColors();
 	
 	result = g_currentMessage.changed ? Plugin_Handled : Plugin_Continue;
-	
+	//send of to next frame as we can't create another user message within this hook
 	g_processedMessages.PushArray(g_currentMessage);
 	g_currentMessage.Reset();
 	return result;
 }
-
+//continuation
 public void OnGameFrame() {
 	for (int index; index < g_processedMessages.Length; index++) {
 		// pop message
@@ -286,17 +290,8 @@ public void OnGameFrame() {
 		// process message
 		//if this failes we hopefully threw an error and will continue processing
 		//other messages in the next game tick, as this one was already dequeued
-//		Profiler profiler = new Profiler();
-//		profiler.Start();
-		
 		if (g_currentMessage.changed) ResendChatMessage();
 		Call_OnChatMessagePost();
-		
-//		profiler.Stop();
-//		float time = profiler.Time;
-//		float ticks = time * 100.0 / GetTickInterval();
-//		PrintToServer("MCP PostProcessing took %.3f ms / %f%% ticks", time*1000.0, ticks);
-//		delete profiler;
 	}
 }
 

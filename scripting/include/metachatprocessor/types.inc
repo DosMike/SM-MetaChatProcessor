@@ -12,6 +12,13 @@
 #define MCP_MAXLENGTH_NAME			128		// Game has a max length of 32, this buffer is bigger to allow for tags and colors without breaking the name
 #define MCP_MAXLENGTH_MESSAGE		256		// This is based upon the SDK and the length of the entire message, including tags, name, etc. (we can't send more)
 
+/** unicode block E000..F8FF is private use area, E000..EFFF is "user zone" for linux
+ * so let's use that block to properly escape curlies for clients that are not allowed to use colors
+ * these unicodes are 3 bytes! EE8080..EEBFBF with 4,2,2 bits per byte reserved for utf8 multibyte markers
+ *  I'm using C01 for "C01or" so it wont clash as easily if other people use the PUA block
+ */
+#define MCP_PUA_ESCAPED_LCURLY "\uEC01"
+
 /**
  * Sender flags appear before the chat entry in asterisks: *DEAD*
  * Their purpose is to give more information about the senders status.

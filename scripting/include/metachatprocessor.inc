@@ -4,7 +4,7 @@
 #define _mcp_included
 
 //yywwrr: y year, w week in year, r revision in week
-#define MCP_VERSION 221101
+#define MCP_VERSION 221301
 
 #include "metachatprocessor/types.inc"
 
@@ -70,6 +70,40 @@ native void MCP_UnregisterTargetGroups();
  *  recipients as the chat processor hooks might block it.
  */
 native void MCP_SendChat(int author, ArrayList recipients, const char[] message, mcpSenderFlag flags = mcpSenderNone, mcpTargetGroup group = mcpTargetNone, mcpMessageOption options = mcpMsgDefault, const char[] tagColor = "");
+
+/**
+ * If you want to transform messages using color tags you might want to use this,
+ * to prevent user input from being converted, before.
+ * However, if you can, it is recommended to use native colors, to save on processing
+ * time on color tags (if the message flag mcpMsgProcessColors is set).
+ * After adding your color tags, call MCP_UnescapeCurlies().
+ *
+ * MCP_EscapeCurlies(message, sizeof(message));
+ * Format(message, sizeof(message), "{gold}%s", message);
+ * CFormatColor(message, sizeof(message), author);
+ * MCP_UnescapeCurlies(message, sizeof(message));
+ *
+ * @param message - the message buffer to process
+ * @param maxlength - the buffer size
+ */
+stock void MCP_EscapeCurlies(char[] message, int maxlength) {
+	ReplaceString(message, maxlength, "{", MCP_PUA_ESCAPED_LCURLY);
+}
+
+/**
+ * Call this function after color tags have been processed.
+ *
+ * MCP_EscapeCurlies(message, sizeof(message));
+ * Format(message, sizeof(message), "{gold}%s", message);
+ * CFormatColor(message, sizeof(message), author);
+ * MCP_UnescapeCurlies(message, sizeof(message));
+ *
+ * @param message - the message buffer to process
+ * @param maxlength - the buffer size
+ */
+stock void MCP_UnecapeCurlies(char[] message, int maxlength) {
+	ReplaceString(message, maxlength, MCP_PUA_ESCAPED_LCURLY, "{");
+}
 
 /**
 Shared plugin information
