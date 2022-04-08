@@ -23,7 +23,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w13a"
+#define PLUGIN_VERSION "22w14a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -182,6 +182,14 @@ public bool OnClientConnect(int client, char[] rejectmsg, int maxlen) {
 	
 	strcopy(clientNamePrefix[client], sizeof(clientNamePrefix[]), ""); //use game default method to color name
 	strcopy(clientChatColor[client], sizeof(clientChatColor[]), ""); //whatever the format is using
+	
+	if (g_compatLevel & mcpCompatDrixevel)
+		mcp_drixevel_client_connect(client);
+}
+
+public void OnClientDisconnect(int client) {
+	if (g_compatLevel & mcpCompatDrixevel)
+		mcp_drixevel_client_disconnect(client);
 }
 
 
@@ -264,15 +272,23 @@ Action ProcessSayText2() {
 		g_currentMessage.changed |= RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
 	}
 	
-	//processing message hooks (early, normal, late)
-	for (int i=-1;i<=1;i++) {
-		result = Call_OnChatMessage(i);
-		if (result >= Plugin_Handled) return Plugin_Handled;
-		else if (result == Plugin_Changed) g_currentMessage.changed = true;
-	}
+	//processing message hooks (early)
+	result = Call_OnChatMessage(-1);
+	if (result >= Plugin_Handled) return Plugin_Handled;
+	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
-	//process colors. this applies prefix and colors if not already done
-	g_currentMessage.changed |= FinalizeChatColors();
+	//processing message hooks (normal)
+	//ccc/drixevel technically apply color to messages in the normal hook...
+	result = Call_OnChatMessage(0);
+	if (result >= Plugin_Handled) return Plugin_Handled;
+	else if (result == Plugin_Changed) g_currentMessage.changed = true;
+	//...but default colors are added after, if missing, so i guess i'll just do it here?
+	g_currentMessage.changed |= ApplyClientChatColors(); //process colors. this applies prefix and colors if not already done
+	
+	//processing message hooks (late)
+	result = Call_OnChatMessage(1); //can still change colors if wanted i guess
+	if (result >= Plugin_Handled) return Plugin_Handled;
+	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
 	result = g_currentMessage.changed ? Plugin_Handled : Plugin_Continue;
 	//send of to next frame as we can't create another user message within this hook
@@ -393,12 +409,14 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 	}
 	
 	//perform message option transformations, as they are the same for all instances
-	if (g_currentMessage.options & mcpMsgProcessColors)
+	if (g_currentMessage.options & mcpMsgProcessColors) {
+		CFormatColor(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender);
 		CFormatColor(g_currentMessage.message, sizeof(MessageData::message), g_currentMessage.sender);
+	}
 //	else if (g_currentMessage.options & mcpMsgRemoveColors) { //this is now done after pre to clean user input, not this late
 //		RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
 //	}
-
+	
 	strcopy(sEffectiveName, nEffectiveNameSz, g_currentMessage.sender_display);
 	if (g_currentMessage.options & mcpMsgIgnoreNameColor) {
 		//we need to remove all color characters from the possibly tagged display name
@@ -450,8 +468,9 @@ static void FormatChatMessage(int client, char[] message, int maxlen, int templa
 	}
 	
 }
+
 /** @return true on changes */
-bool FinalizeChatColors() {
+bool ApplyClientChatColors() {
 	char namePrefix[MCP_MAXLENGTH_NAME];
 	char displayName[MCP_MAXLENGTH_NAME];
 	char chatColor[MCP_MAXLENGTH_COLORTAG];
@@ -461,20 +480,15 @@ bool FinalizeChatColors() {
 	
 	Action result = Call_OnChatMessageColors(namePrefix, displayName, chatColor);
 	if (result >= Plugin_Handled) {
-		return false; //handled? ok I wont do anything
+		return true; //handled? ok I wont do anything. is it actually changed? i guess
 	} else if (result == Plugin_Stop) {
 		//we say stop prevents coloring, sender_name should have the unformatted name, so check
 		strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
-		strcopy(namePrefix, sizeof(namePrefix), "");
-		strcopy(chatColor, sizeof(chatColor), "");
+		RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
 		return true;
 	}
 	bool changed = result == Plugin_Changed;
 	
-	if (g_currentMessage.options & mcpMsgProcessColors) {
-		CFormatColor(namePrefix, sizeof(namePrefix), g_currentMessage.sender);
-		CFormatColor(displayName, sizeof(displayName), g_currentMessage.sender);
-	}
 	char colTagEnd[MCP_MAXLENGTH_NATIVECOLOR];
 	//was the name formatted? does the name tag spill color onto the name?
 	if (StrEqual(g_currentMessage.sender_name, displayName) && !GetStringColor(namePrefix, colTagEnd, sizeof(colTagEnd), true)) {

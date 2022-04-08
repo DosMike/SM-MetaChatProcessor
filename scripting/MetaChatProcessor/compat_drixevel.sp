@@ -6,12 +6,16 @@
 #error Please compile the main file
 #endif
 
+// If i understood this correctly, if we only wanted to privde compat for HexTags
+// all the tag processing would be unneccessary here. But idk what plugins out
+// there use Drixevel's Chat-Processor, so I squeezed it in here.
+
 #define MCP_DRIXEVEL_PLUGIN_VERSION "2.2.9 MCP"
 
 // Tag data for dcp
 static ArrayList drixevel_NameTags[MAXPLAYERS + 1];
-static char drixevel_NameColor[MAXPLAYERS + 1][MAXLENGTH_NAME];
-static char drixevel_ChatColor[MAXPLAYERS + 1][MAXLENGTH_MESSAGE];
+static char drixevel_NameColor[MAXPLAYERS + 1][MCP_MAXLENGTH_NAME];
+static char drixevel_ChatColor[MAXPLAYERS + 1][MCP_MAXLENGTH_MESSAGE];
 
 // "normal" forwards
 static Handle drixevel_fwdOnChatMessageSendPre;
@@ -25,6 +29,8 @@ static Handle drixevel_fwdOnStripClientTagsPost;
 static Handle drixevel_fwdOnSetTagColorPost;
 static Handle drixevel_fwdOnSetNameColorPost;
 static Handle drixevel_fwdOnSetChatColorPost;
+#pragma unused drixevel_fwdOnReloadChatData
+//called on configs executed if late loaded. we don't have configs, so we stub this
 static Handle drixevel_fwdOnReloadChatData;
 
 static StringMap drixevel_FormatCache;
@@ -69,7 +75,6 @@ void mcp_drixevel_start() {
 	mcp_drixevel_OnCVarChanged_Version(version,"","");
 	delete version;
 	drixevel_FormatCache = new StringMap();
-	//imo creating forwards should be done here, and registering to them should be done in AllPluginsLoaded, but whatever
 }
 void mcp_drixevel_client_connect(int client) {
 	if (drixevel_NameTags[client] == null) {
@@ -92,7 +97,6 @@ void mcp_drixevel_pluginsloaded() {
 
 static void UpdateClientPrefixAndColor(int client) {
 	char prefix[MCP_MAXLENGTH_NAME];
-	char color[MCP_MAXLENGTH_COLORTAG];
 	//update name prefix
 	if (drixevel_NameColor[client][0]) {
 		strcopy(prefix, sizeof(prefix), drixevel_NameColor[client]);
@@ -110,7 +114,7 @@ static void UpdateClientPrefixAndColor(int client) {
 		int at;
 		if( (at=StringStartsWithColor(drixevel_ChatColor[client]))<0 ||
 			!ParseChatColor(drixevel_ChatColor[client][at], clientChatColor[client], sizeof(clientChatColor[]), client)) {
-			LogError("[MCP] Drixevel Chat-Processor chat color prefix is not a simple color; Ignoring value to prevent truncated message")
+			LogError("[MCP] Drixevel Chat-Processor chat color prefix is not a simple color; Ignoring value to prevent truncated message");
 			clientChatColor[client][0]=0;
 		}
 	} else {
@@ -119,9 +123,9 @@ static void UpdateClientPrefixAndColor(int client) {
 }
 
 public Action MCP_Drixevel_OnChatMessage(int& sender, ArrayList recipients, mcpSenderFlag& senderflags, mcpTargetGroup& targetgroup, mcpMessageOption& options, char[] targetgroupColor, char[] name, char[] message) {
+	bool processColors = (options & mcpMsgProcessColors)!=mcpMsgDefault;
+	bool removeColors = (options & mcpMsgRemoveColors)!=mcpMsgDefault;
 	char sFlag[64];
-	bool processColors = options & mcpMsgProcessColors;
-	bool removeColors = options & mcpMsgRemoveColors;
 	BuildMessageFormat(senderflags, targetgroup, sFlag, sizeof(sFlag));
 	Call_StartForward(drixevel_fwdOnChatMessage);
 	Call_PushCellRef(sender);
@@ -139,15 +143,39 @@ public Action MCP_Drixevel_OnChatMessage(int& sender, ArrayList recipients, mcpS
 		else options &=~ mcpMsgProcessColors;
 		if (removeColors) options |= mcpMsgRemoveColors;
 		else options &=~ mcpMsgRemoveColors;
+		//from code review version 2.2.9 seems to have a bug that prevents actually changing the format
+//		ParseMessageFormat(sFlag, senderflags, targetgroup);
 	}
 }
 
 public Action MCP_Drixevel_OnChatFormatted(int sender, int recipient, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, char[] formatted) {
-	
+	char flagString[64];
+	BuildMessageFormat(senderflags, targetgroup, flagString, sizeof(flagString));
+	Call_StartForward(drixevel_fwdOnChatMessageSendPre);
+	Call_PushCell(sender);
+	Call_PushCell(recipient);
+	Call_PushString(flagString);
+	Call_PushStringEx(formatted, MCP_MAXLENGTH_MESSAGE, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushCell(MCP_MAXLENGTH_MESSAGE);
+	Action result;
+	int error = Call_Finish(result);
+	if (error != SP_ERROR_NONE) ThrowError("[MCP] Drixevel's OnChatMessageSendPre call failed with code %i", error);
+	return result;
 }
 
 public void MCP_Drixevel_OnChatMessagePost(int sender, ArrayList recipients, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, const char[] targetgroupColor, const char[] name, const char[] message) {
-	
+	Call_StartForward(drixevel_fwdOnChatMessagePost);
+	Call_PushCell(sender);
+	Call_PushCell(recipients);
+	Call_PushString(g_currentMessage.msg_name);
+	char format[64];
+	GetFlagFormatString(g_currentMessage.msg_name, format, sizeof(format));
+	Call_PushString(format);
+	Call_PushString(name);
+	Call_PushString(message);
+	Call_PushCell((options & mcpMsgProcessColors)!=mcpMsgDefault);
+	Call_PushCell((options & mcpMsgRemoveColors)!=mcpMsgDefault);
+	Call_Finish();
 }
 
 static void GetFlagFormatString(const char[] input, char[] output, int maxsize) {
@@ -161,32 +189,174 @@ static void GetFlagFormatString(const char[] input, char[] output, int maxsize) 
 	ParseMessageFormat(input, flags, group);
 	//build fake format string for game & input
 	if (group == mcpTargetSpecator && (flags & mcpSenderSpectator)) {
-		FormatEx(output, sizeof(output), "(%T) {1} : {2}", "Group_Spectator", LANG_SERVER);
+		FormatEx(output, maxsize, "(%T) {1} : {2}", "Group_Spectator", LANG_SERVER);
 	} else if (group == mcpTargetTeamSender) {
 		if (flags & mcpSenderDead) {
-			FormatEx(output, sizeof(output), "*%T*(%T) {1} : {2}", "Senderflag_Dead", LANG_SERVER, "Group_Team", LANG_SERVER);
+			FormatEx(output, maxsize, "*%T*(%T) {1} : {2}", "Senderflag_Dead", LANG_SERVER, "Group_Team", LANG_SERVER);
 		} else {
-			FormatEx(output, sizeof(output), "(%T) {1} : {2}", "Group_Team", LANG_SERVER);
+			FormatEx(output, maxsize, "(%T) {1} : {2}", "Group_Team", LANG_SERVER);
 		}
 	} else if (mcpTargetTeam1 <= group <= mcpTargetTeam4) {
 		char teamPhrase[12] = "Group_Team0";
-		teamPhrase[10] = '1' + (group-mcpTargetTeam1); //generates char 1..4
+		teamPhrase[10] = '1' + view_as<int>(group-mcpTargetTeam1); //generates char 1..4
 		if (!TranslationPhraseExists(teamPhrase)) teamPhrase[10]=0; //use generic team phrase instead
 		if (flags & mcpSenderDead) {
-			FormatEx(output, sizeof(output), "*%T*(%T) {1} : {2}", "Senderflag_Dead", LANG_SERVER, teamPhrase, LANG_SERVER);
+			FormatEx(output, maxsize, "*%T*(%T) {1} : {2}", "Senderflag_Dead", LANG_SERVER, teamPhrase, LANG_SERVER);
 		} else {
-			FormatEx(output, sizeof(output), "(%T) {1} : {2}", teamPhrase, LANG_SERVER);
+			FormatEx(output, maxsize, "(%T) {1} : {2}", teamPhrase, LANG_SERVER);
 		}
 	} else {
-		FormatEx(output, sizeof(output), "{1} : {2}");
+		FormatEx(output, maxsize, "{1} : {2}");
 	}
 	drixevel_FormatCache.SetString(input, output);
 }
 
+// the rest will be mainly copy & paste from drixevels. can't really do
+// anything about that as the natives are given and calls are alreay minimal
+// so credites to drixevel for the next two sections
+
 // -------------------- Forwards --------------------
 
-static Call_Drixevel_OnChatMessage() {
+static bool AddClientTag(int client, const char[] tag) {
+	if (client == 0 || client > MaxClients || IsFakeClient(client))
+		return false;
 	
+	int index = drixevel_NameTags[client].PushString(tag);
+	UpdateClientPrefixAndColor(client);
+	
+	Call_StartForward(drixevel_fwdOnAddClientTagPost);
+	Call_PushCell(client);
+	Call_PushCell(index);
+	Call_PushString(tag);
+	Call_Finish();
+	
+	return true;
+}
+
+static bool RemoveClientTag(int client, const char[] tag) {
+	if (client == 0 || client > MaxClients || IsFakeClient(client))
+		return false;
+	
+	bool found; char sTag[MCP_MAXLENGTH_NAME];
+	for (int i = 0; i < drixevel_NameTags[client].Length; i++) {
+		drixevel_NameTags[client].GetString(i, sTag, sizeof(sTag));
+		
+		if (StrContains(sTag, tag, false) == -1)
+			continue;
+			
+		drixevel_NameTags[client].Erase(i);
+		UpdateClientPrefixAndColor(client); //needs to be called every time because forward could have sideffects
+		
+		Call_StartForward(drixevel_fwdOnRemoveClientTagPost);
+		Call_PushCell(client);
+		Call_PushCell(i);
+		Call_PushString(tag);
+		Call_Finish();
+		
+		found = true;
+	}
+	
+	return found;
+}
+
+static bool SwapClientTags(int client, const char[] tag1, const char[] tag2) {
+	if (client == 0 || client > MaxClients || IsFakeClient(client))
+		return false;
+	
+	int index1 = -1;
+	if ((index1 = drixevel_NameTags[client].FindString(tag1)) == -1)
+		return false;
+	
+	int index2 = -1;
+	if ((index2 = drixevel_NameTags[client].FindString(tag2)) == -1)
+		return false;
+	
+	drixevel_NameTags[client].SwapAt(index1, index2);
+	UpdateClientPrefixAndColor(client);
+	
+	Call_StartForward(drixevel_fwdOnSwapClientTagsPost);
+	Call_PushCell(client);
+	Call_PushCell(index1);
+	Call_PushString(tag1);
+	Call_PushCell(index2);
+	Call_PushString(tag2);
+	Call_Finish();
+	
+	return true;
+}
+
+static bool StripClientTags(int client) {
+	if (drixevel_NameTags[client].Length == 0)
+		return false;
+	
+	drixevel_NameTags[client].Clear();
+	UpdateClientPrefixAndColor(client);
+	
+	Call_StartForward(drixevel_fwdOnStripClientTagsPost);
+	Call_PushCell(client);
+	Call_Finish();
+	
+	return true;
+}
+
+static bool SetTagColor(int client, const char[] tag, const char[] color) {
+	if (client == 0 || client > MaxClients || IsFakeClient(client))
+		return false;
+	
+	bool found; char sTag[MCP_MAXLENGTH_NAME];
+	for (int i = 0; i < drixevel_NameTags[client].Length; i++) {
+		drixevel_NameTags[client].GetString(i, sTag, sizeof(sTag));
+		
+		if (StrContains(sTag, tag, false) == -1)
+			continue;
+		
+		CRemoveTags(sTag, sizeof(sTag));
+		Format(sTag, sizeof(sTag), "%s%s", color, sTag);
+		
+		drixevel_NameTags[client].SetString(i, sTag);
+		UpdateClientPrefixAndColor(client);
+		
+		Call_StartForward(drixevel_fwdOnSetTagColorPost);
+		Call_PushCell(client);
+		Call_PushCell(i);
+		Call_PushString(tag);
+		Call_PushString(color);
+		Call_Finish();
+		
+		found = true;
+	}
+	
+	return found;
+}
+
+static bool SetNameColor(int client, const char[] color) {
+	if (client == 0 || client > MaxClients || IsFakeClient(client))
+		return false;
+	
+	strcopy(drixevel_NameColor[client], MCP_MAXLENGTH_NAME, color);
+	UpdateClientPrefixAndColor(client);
+	
+	Call_StartForward(drixevel_fwdOnSetNameColorPost);
+	Call_PushCell(client);
+	Call_PushString(color);
+	Call_Finish();
+	
+	return true;
+}
+
+static bool SetChatColor(int client, const char[] color) {
+	if (client == 0 || client > MaxClients || IsFakeClient(client))
+		return false;
+	
+	strcopy(drixevel_ChatColor[client], MCP_MAXLENGTH_MESSAGE, color);
+	UpdateClientPrefixAndColor(client);
+	
+	Call_StartForward(drixevel_fwdOnSetChatColorPost);
+	Call_PushCell(client);
+	Call_PushString(color);
+	Call_Finish();
+	
+	return true;
 }
 
 // -------------------- Natives --------------------
@@ -194,10 +364,103 @@ static Call_Drixevel_OnChatMessage() {
 public any Native_Drixevel_GetFlagFormatString(Handle plugin, int numParams) {
 	int len, error;
 	if ((error=GetNativeStringLength(1,len))!=SP_ERROR_NONE) ThrowNativeError(error, "Faile to create native string");
-	char input[len+1];
+	char[] input = new char[len+1];
 	GetNativeString(1, input, len+1);
 	char output[64];
 	
 	GetFlagFormatString(input, output, sizeof(output));
 	SetNativeString(2, output, GetNativeCell(3));
+}
+
+public int Native_Drixevel_AddClientTag(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	
+	int size;
+	GetNativeStringLength(2, size); size++;
+	
+	char[] sTag = new char[size];
+	GetNativeString(2, sTag, size);
+	
+	return AddClientTag(client, sTag);
+}
+
+
+public int Native_Drixevel_RemoveClientTag(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	
+	int size;
+	GetNativeStringLength(2, size); size++;
+	
+	char[] sTag = new char[size];
+	GetNativeString(2, sTag, size);
+	
+	return RemoveClientTag(client, sTag);
+}
+
+public int Native_Drixevel_SwapClientTags(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	
+	int size;
+	
+	GetNativeStringLength(2, size); size++;
+	char[] sTag1 = new char[size];
+	GetNativeString(2, sTag1, size);
+	
+	GetNativeStringLength(3, size); size++;
+	char[] sTag2 = new char[size];
+	GetNativeString(3, sTag2, size);
+	
+	return SwapClientTags(client, sTag1, sTag2);
+}
+
+public int Native_Drixevel_StripClientTags(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	return StripClientTags(client);
+}
+
+public int Native_Drixevel_SetTagColor(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	
+	int size;
+	
+	GetNativeStringLength(2, size); size++;
+	char[] sTag = new char[size];
+	GetNativeString(2, sTag, size);
+	
+	GetNativeStringLength(3, size); size++;
+	char[] sColor = new char[size];
+	GetNativeString(3, sColor, size);
+	
+	return SetTagColor(client, sTag, sColor);
+}
+
+public int Native_Drixevel_SetNameColor(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	
+	int size;
+	GetNativeStringLength(2, size); size++;
+	
+	char[] sColor = new char[size];
+	GetNativeString(2, sColor, size);
+	
+	return SetNameColor(client, sColor);
+}
+
+public int Native_Drixevel_SetChatColor(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	
+	int size;
+	GetNativeStringLength(2, size); size++;
+	
+	char[] sColor = new char[size];
+	GetNativeString(2, sColor, size);
+	
+	return SetChatColor(client, sColor);
 }
