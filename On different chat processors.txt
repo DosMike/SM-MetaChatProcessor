@@ -1,3 +1,7 @@
+These are my personal understanding, opinions and ramblings on chat processors
+that I could find on AlliedModders and why I want to make another one 
+xkcd.com/927
+
 Historically it was just a SayText/SayText2 pass-through. This allows plugins 
 to more easily hook messages using well defined argument lists in the presented 
 forwards. The components that could be edited were the name and the message, 
@@ -47,6 +51,10 @@ includes color handling. Besides parsing player chat with SayText/SayText2
 messages it also hooks radio messages and system messages (TextMsg/RadioMsg). 
 It then provides the usual color and format stiching and everything is done 
 with per player callbacks. Looks great and has a lot of modules.
+The modularization and complexity of this char processor makes it feel like a
+very enterprise solution for a simple task, that, along with the API key system
+it uses, doesn't make it feel like I'd enjoy adding support in form of a compat 
+layer to it myself.
 
 MetaChatProcessor
 While I don't want a library as big as Color Chat Processor and I think editing 
@@ -74,7 +82,8 @@ This is how CCC with SCP and CCC menu does it:
  *  or teamcolor it (because tag)
  * after forward prepend tag
  * after forward color message
- * some author manipulation for csgo colors (why \x01\x0b?)
+ * some author manipulation for csgo colors
+   (\x01\x0b : [default, non-color] is required to allow any color as first color)
  * after forward return
  -/ done
 
@@ -104,7 +113,7 @@ Drixevel's allows for a list of tags that all get prepended.
 Note that HexTags COMPLETELY ignores Drixevel's tag system. Be it due to that
 system being added later or simply for the need of dynamic tags like {time}.
 On top of that HexTags basically implements another chat processor with 
-forwards that do no receive the recipients list.
+forwards that do not receive the recipients list.
 HexTags does however load from config and from what i can tell even store in 
 client prefs.
 
