@@ -10,6 +10,7 @@
 // the well known color format codes in the chat processor is an ok option to have.
 #include <multicolors>
 
+/* snipets for profiling */
 //#include <profiler>
 //	Profiler profiler = new Profiler();
 //	profiler.Start();
@@ -17,13 +18,13 @@
 //	profiler.Stop();
 //	float time = profiler.Time;
 //	float ticks = time * 100.0 / GetTickInterval();
-//	PrintToServer("MCP PreProcessing took %.3f ms / %f%% ticks", time*1000.0, ticks);
+//	PrintToServer("[MCP] Processing took %.3f ms / %f%% ticks", time*1000.0, ticks);
 //	delete profiler;
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w14a"
+#define PLUGIN_VERSION "22w16a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -80,10 +81,9 @@ enum struct MessageData {
 	char sender_display[MCP_MAXLENGTH_NAME]; //normally ends up as \x03%N
 	char message[MCP_MAXLENGTH_INPUT];
 	
-	int recipientCount;
-	int recipients[MAXPLAYERS];
+	ArrayList listRecipients; //other plugins can't close our handle, so we are fine using this
 	
-	void Reset() {
+	void Reset(bool newRecipientsInstace=false) {
 		this.valid = false;
 		this.changed = false;
 		this.senderflags = mcpSenderNone;
@@ -93,24 +93,10 @@ enum struct MessageData {
 		for (;i<MCP_MAXLENGTH_COLORTAG;i++) this.msg_name[i] = this.sender_name[i] = this.customTagColor[i] = this.sender_display[i] = this.message[i] = 0;
 		for (;i<MCP_MAXLENGTH_NAME;i++) this.sender_name[i] = this.sender_display[i] = this.message[i] = 0;
 		for (;i<MCP_MAXLENGTH_INPUT;i++) this.message[i] = 0;
-		this.recipientCount=0;
-	}
-	void SetRecipients(ArrayList list) {
-		this.recipientCount = 0;
-		for (int i=0; i<list.Length; i+=1) {
-			int client = list.Get(i);
-			if (1<=client<=MaxClients && IsClientInGame(client) && !IsFakeClient(client)) {
-				this.recipients[this.recipientCount] = client;
-				this.recipientCount += 1;
-			}
-		}
-	}
-	void GetRecipients(ArrayList list) {
-		list.Clear();
-		for (int i; i<this.recipientCount; i+=1) {
-			int client = this.recipients[i];
-			if (1<=client<=MaxClients && IsClientInGame(client) && !IsFakeClient(client))
-				list.Push(client);
+		if (this.listRecipients==null || newRecipientsInstace) {
+			this.listRecipients = new ArrayList();
+		} else {
+			this.listRecipients.Clear();
 		}
 	}
 }
@@ -185,6 +171,7 @@ public bool OnClientConnect(int client, char[] rejectmsg, int maxlen) {
 	
 	if (g_compatLevel & mcpCompatDrixevel)
 		mcp_drixevel_client_connect(client);
+	return true;
 }
 
 public void OnClientDisconnect(int client) {
@@ -213,8 +200,7 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
 	
 	for (int reci=0;reci<playersNum;reci++) {
-		g_currentMessage.recipients[reci] = players[reci];
-		g_currentMessage.recipientCount = playersNum;
+		g_currentMessage.listRecipients.Push(players[reci]);
 	}
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
@@ -240,8 +226,7 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
 	
 	for (int reci=0;reci<playersNum;reci++) {
-		g_currentMessage.recipients[reci] = players[reci];
-		g_currentMessage.recipientCount = playersNum;
+		g_currentMessage.listRecipients.Push(players[reci]);
 	}
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
@@ -293,13 +278,15 @@ Action ProcessSayText2() {
 	result = g_currentMessage.changed ? Plugin_Handled : Plugin_Continue;
 	//send of to next frame as we can't create another user message within this hook
 	g_processedMessages.PushArray(g_currentMessage);
-	g_currentMessage.Reset();
+	g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle
 	return result;
 }
 //continuation
 public void OnGameFrame() {
 	for (int index; index < g_processedMessages.Length; index++) {
 		// pop message
+		//delete the previous handle, we will fetch an old one from the list
+		delete g_currentMessage.listRecipients;
 		g_processedMessages.GetArray(index, g_currentMessage);
 		g_processedMessages.Erase(index);
 		
@@ -309,6 +296,8 @@ public void OnGameFrame() {
 		if (g_currentMessage.changed) ResendChatMessage();
 		Call_OnChatMessagePost();
 	}
+	//we still have an old recipients list here that wasn't deleted. this instance
+	//will be cleared and reused by the next SayText2 hook
 }
 
 static void ResendChatMessage() {
@@ -321,8 +310,9 @@ static void ResendChatMessage() {
 	int template = PrepareChatFormat(tFlags, tGroup, sizeof(tGroup), tGroupColor, sizeof(tGroupColor), sEffectiveName, sizeof(sEffectiveName));
 	bool chatFlag = !(g_currentMessage.options & mcpMsgNoConsoleCopy);
 	
-	for (int i;i<g_currentMessage.recipientCount;i++) {
-		int recipient=g_currentMessage.recipients[i];
+	int recipientCount = g_currentMessage.listRecipients.Length;
+	for (int i; i < recipientCount; i++) {
+		int recipient = g_currentMessage.listRecipients.Get(i);
 		if (!recipient) continue;
 		
 		//because i made the prefixes transalteable, we need to format for every player
@@ -350,7 +340,7 @@ static void ResendChatMessage() {
 			//  The chat field is a bit missleading. A more fitting name for it would be
 			//  consoleMirrored, because if true the chat message get's also printed in
 			//  the clients console window. Setting chat to false supresses the additional
-			//  console output.
+			//  console output. I guess system messages in chat are not copied to console?
 			Handle msg = StartMessageOne("SayText2", recipient, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
 			if (msg == INVALID_HANDLE) ThrowError("Failed to create SayText2 message");
 			if (g_bUseProtobuf) {

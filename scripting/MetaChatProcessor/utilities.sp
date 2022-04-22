@@ -61,8 +61,8 @@ void LoadCompatConfig() {
 	
 	if (kv.JumpToKey("Compatibility")) { //jump to key goes into the section
 		if (kv.GetNum("SCP Redux")>0) g_compatLevel |= mcpCompatSCPRedux;
-		if (kv.GetNum("Drixevel")>0) g_compatLevel |= mcpCompatSCPRedux;
-		if (kv.GetNum("Cider")>0) g_compatLevel |= mcpCompatSCPRedux;
+		if (kv.GetNum("Drixevel")>0) g_compatLevel |= mcpCompatDrixevel;
+		if (kv.GetNum("Cider")>0) g_compatLevel |= mcpCompatCiderCP;
 		g_fixCompatPostCalls = (kv.GetNum("Fix Post Calls")>0);
 		kv.GoBack();
 	} else LogError("[MCP] 'Compatibility' section missing from config");

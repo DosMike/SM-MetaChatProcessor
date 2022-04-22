@@ -77,6 +77,11 @@ void pluginAPI_init() {
 		Param_CellByRef, Param_Cell, //sender, recipients
 		Param_CellByRef, Param_CellByRef, Param_CellByRef, Param_String, //senderflags, group, options, groupcolor
 		Param_String, Param_String); //name, message
+	//MCP_OnChatMessageColors
+	g_fwdOnMessageColors = new PrivateForward(ET_Event,
+		Param_CellByRef, Param_Cell, //sender, recipients
+		Param_CellByRef, Param_CellByRef, Param_CellByRef, Param_String, //senderflags, group, options, groupcolor
+		Param_String, Param_String, Param_String); //prefix, name, chatcolor
 	//MCP_OnChatMessageFormatted
 	g_fwdOnMessageFormatted = new PrivateForward(ET_Event, 
 		Param_Cell, Param_Cell, //sender, recipients
@@ -109,28 +114,23 @@ public void OnAllPluginsLoaded() {
 // -------------------- FORWARD WRAPPER --------------------
 
 /**
- * Check for no errors, validate recipients and optionally rebuild msg_format string.
- * will close the recipients handle as that's temporary now
+ * Check for no errors, validate recipients and optionally rebuild msg_format string
  */
-static void ValidateAfterCall(const char[] stage, int error, Action returnedAction, ArrayList recipients, bool rebuildMessageFormat=false) {
-	if (recipients != null && !IsValidHandle(recipients)) {//use is fine: handle.close() is not nulling, so i have to check this was if plugins are bad
-		ThrowError("MCP_OnChatMessage%s closed the recipients handle! What are you, mad?", stage);
-	} else if (returnedAction == Plugin_Changed && recipients.Length == 0 && g_currentMessage.recipientCount > 0) {
+static void ValidateAfterCall(const char[] stage, int error, Action& returnedAction=Plugin_Continue, bool rebuildMessageFormat=false) {
+	//other plugins are not allowed to close handles owned by different plugins, so recipients should always be valid
+	if (returnedAction == Plugin_Changed && g_currentMessage.listRecipients.Length == 0) {
 		static bool hasWarned;
 		if (!hasWarned) {
 			hasWarned = true;
 			LogError("MCP_OnChatMessage%s cleard the recipients list instead of cancelling - As PluginDev, Please reconsider", stage);
 		}
-		g_currentMessage.recipientCount = 0;
-		delete recipients;
+		returnedAction = Plugin_Stop;
 	} else { //remove doubles
-		recipients.Sort(Sort_Ascending, Sort_Integer);
-		for (int i=recipients.Length-1; i>0; i-=1) {
-			if (recipients.Get(i) == recipients.Get(i-1))
-				recipients.Erase(i);
+		g_currentMessage.listRecipients.Sort(Sort_Ascending, Sort_Integer);
+		for (int i = g_currentMessage.listRecipients.Length-1; i > 0; i -= 1) {
+			if (g_currentMessage.listRecipients.Get(i) == g_currentMessage.listRecipients.Get(i-1))
+				g_currentMessage.listRecipients.Erase(i);
 		}
-		g_currentMessage.SetRecipients(recipients);
-		delete recipients;
 	}
 	if (error != SP_ERROR_NONE) {
 		ThrowError("MCP_OnChatMessage%s failed with error code %i", stage, error);
@@ -141,14 +141,12 @@ static void ValidateAfterCall(const char[] stage, int error, Action returnedActi
 
 Action Call_OnChatMessagePre() {
 	if (!g_fwdOnMessagePre.FunctionCount) return Plugin_Continue;
-	ArrayList recipients = new ArrayList();
-	g_currentMessage.GetRecipients(recipients);
 	mcpSenderFlag preFlags = g_currentMessage.senderflags;
 	mcpTargetGroup preGroup = g_currentMessage.group;
 	
 	Call_StartForward(g_fwdOnMessagePre);
 	Call_PushCellRef(g_currentMessage.sender);
-	Call_PushCell(recipients);
+	Call_PushCell(g_currentMessage.listRecipients);
 	Call_PushCellRef(g_currentMessage.senderflags);
 	Call_PushCellRef(g_currentMessage.group);
 	Call_PushCellRef(g_currentMessage.options);
@@ -156,7 +154,7 @@ Action Call_OnChatMessagePre() {
 	Action result;
 	int error = Call_Finish(result);
 	
-	ValidateAfterCall("Pre", error, result, recipients, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
+	ValidateAfterCall("Pre", error, result, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
 	return result;
 }
 
@@ -166,14 +164,12 @@ Action Call_OnChatMessage(int stage) {
 	else if (stage > 0) funForward = g_fwdOnMessage_Late;
 	else funForward = g_fwdOnMessage_Normal;
 	if (!funForward.FunctionCount) return Plugin_Continue;
-	ArrayList recipients = new ArrayList();
-	g_currentMessage.GetRecipients(recipients);
 	mcpSenderFlag preFlags = g_currentMessage.senderflags;
 	mcpTargetGroup preGroup = g_currentMessage.group;
 	
 	Call_StartForward(funForward);
 	Call_PushCellRef(g_currentMessage.sender);
-	Call_PushCell(recipients);
+	Call_PushCell(g_currentMessage.listRecipients);
 	Call_PushCellRef(g_currentMessage.senderflags);
 	Call_PushCellRef(g_currentMessage.group);
 	Call_PushCellRef(g_currentMessage.options);
@@ -183,14 +179,14 @@ Action Call_OnChatMessage(int stage) {
 	Action result;
 	int error = Call_Finish(result);
 	
-	ValidateAfterCall(stage<0?"Early":(stage?"Late":""), error, result, recipients, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
+	ValidateAfterCall(stage<0?"Early":(stage?"Late":""), error, result, (g_currentMessage.senderflags != preFlags || g_currentMessage.group != preGroup));
 	return result;
 }
 
 Action Call_OnChatMessageColors(char[] nameTag, char[] displayName, char[] chatColorTag) {
-	if (!g_fwdOnMessageFormatted.FunctionCount) return Plugin_Continue;
+	if (!g_fwdOnMessageColors.FunctionCount) return Plugin_Continue;
 	
-	Call_StartForward(g_fwdOnMessageFormatted);
+	Call_StartForward(g_fwdOnMessageColors);
 	Call_PushCell(g_currentMessage.sender);
 	Call_PushCell(g_currentMessage.senderflags);
 	Call_PushCell(g_currentMessage.group);
@@ -201,7 +197,7 @@ Action Call_OnChatMessageColors(char[] nameTag, char[] displayName, char[] chatC
 	Action result;
 	int error = Call_Finish(result);
 	
-	ValidateAfterCall("Colors", error, result, null);
+	ValidateAfterCall("Colors", error, result);
 	return result;
 }
 
@@ -215,22 +211,19 @@ Action Call_OnChatMessageFormatted(int target, char[] message, int maxlen) {
 	Call_PushCell(g_currentMessage.group);
 	Call_PushCell(g_currentMessage.options);
 	Call_PushStringEx(message, maxlen, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushCell(maxlen);
 	Action result;
 	int error = Call_Finish(result);
 	
-	ValidateAfterCall("Formatted", error, result, null);
+	ValidateAfterCall("Formatted", error, result);
 	return result;
 }
 
 void Call_OnChatMessagePost() {
 	if (!g_fwdOnMessagePost.FunctionCount) return;
-	ArrayList recipients = new ArrayList();
-	g_currentMessage.GetRecipients(recipients);
 	
 	Call_StartForward(g_fwdOnMessagePost);
 	Call_PushCell(g_currentMessage.sender);
-	Call_PushCell(recipients);
+	Call_PushCell(g_currentMessage.listRecipients);
 	Call_PushCell(g_currentMessage.senderflags);
 	Call_PushCell(g_currentMessage.group);
 	Call_PushCell(g_currentMessage.options);
@@ -239,7 +232,7 @@ void Call_OnChatMessagePost() {
 	Call_PushStringEx(g_currentMessage.message, sizeof(MessageData::message), SM_PARAM_STRING_UTF8, 0);
 	int error = Call_Finish();
 	
-	ValidateAfterCall("Post", error, Plugin_Continue, recipients);
+	ValidateAfterCall("Post", error);
 }
 
 // -------------------- NATIVES --------------------
@@ -300,15 +293,13 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	if (orec == INVALID_HANDLE) {
 		for (int client=1;client<=MaxClients;client++)
 			if (IsClientInGame(client)) {
-				g_currentMessage.recipients[g_currentMessage.recipientCount] = client;
-				g_currentMessage.recipientCount += 1;
+				g_currentMessage.listRecipients.Push(client);
 			}
 	} else {
 		for (int at;at<orec.Length;at++) {
 			int client = orec.Get(at);
 			if (1<=client<=MaxClients && IsClientInGame(client)) {
-				g_currentMessage.recipients[g_currentMessage.recipientCount] = client;
-				g_currentMessage.recipientCount += 1;
+				g_currentMessage.listRecipients.Push(client);
 			}
 		}
 	}

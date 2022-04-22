@@ -1,7 +1,7 @@
-#if defined _mcp_included
+#if defined _mcp_common_types
 #endinput
 #endif
-#define _mcp_included
+#define _mcp_common_types
 
 /**
  * Different constants

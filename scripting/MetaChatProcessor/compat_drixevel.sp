@@ -129,7 +129,7 @@ public Action MCP_Drixevel_OnChatMessage(int& sender, ArrayList recipients, mcpS
 	BuildMessageFormat(senderflags, targetgroup, sFlag, sizeof(sFlag));
 	Call_StartForward(drixevel_fwdOnChatMessage);
 	Call_PushCellRef(sender);
-	Call_PushCellRef(recipients);
+	Call_PushCell(recipients);
 	Call_PushStringEx(sFlag, sizeof(sFlag), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushStringEx(name, MCP_MAXLENGTH_NAME, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushStringEx(message, MCP_MAXLENGTH_INPUT, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);

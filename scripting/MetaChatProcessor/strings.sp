@@ -314,5 +314,6 @@ void CollapseColors(char[] buffer, int maxsize) {
 		strcopy(buffer[write], maxsize-write, color);
 		write += strlen(color);
 	}
+	buffer[write]=0; //terminate at collapsed position
 	
 }
