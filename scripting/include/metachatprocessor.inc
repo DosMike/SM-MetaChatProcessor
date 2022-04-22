@@ -111,10 +111,11 @@ stock void MCP_UnecapeCurlies(char[] message, int maxlength) {
  * @param team - if 0, all clients are collected
  * @param clients - accumulator for clients
  * @param subtract - remove the clients from the accumulator, instead of adding one
+ * @param bots - set true to allow bots in the results
  */
-stock void MCP_FindClientsByTeam(int team, ArrayList clients, bool subtract=false) {
+stock void MCP_FindClientsByTeam(int team, ArrayList clients, bool subtract=false, bool bots=false) {
 	for (int client=1; client<=MaxClients; client++) {
-		if (IsClientInGame(client) && (team==0 || GetClientTeam(client)==team)) {
+		if (IsClientInGame(client) && (bots||!IsFakeClient(client)) && (team==0 || GetClientTeam(client)==team)) {
 			if (subtract) {
 				int at;
 				while ((at=clients.FindValue(client)) != -1) clients.Erase(at);
@@ -129,11 +130,12 @@ stock void MCP_FindClientsByTeam(int team, ArrayList clients, bool subtract=fals
  * 
  * @param clients - accumulator for clients
  * @param subtract - remove the clients from the accumulator, instead of adding one
- * @param alive - set true to get dead players instead
+ * @param alive - set false to get dead players instead
+ * @param bots - set true to allow bots in the results
  */
-stock void MCP_FindClientsAlive(ArrayList clients, bool subtract=false, bool alive=true) {
+stock void MCP_FindClientsAlive(ArrayList clients, bool subtract=false, bool alive=true, bool bots=false) {
 	for (int client=1; client<=MaxClients; client++) {
-		if (IsClientInGame(client) && (GetClientHealth(client)>0) == alive) {
+		if (IsClientInGame(client) && (bots||!IsFakeClient(client)) && (GetClientHealth(client)>0) == alive) {
 			if (subtract) {
 				int at;
 				while ((at=clients.FindValue(client)) != -1) clients.Erase(at);
@@ -144,7 +146,7 @@ stock void MCP_FindClientsAlive(ArrayList clients, bool subtract=false, bool ali
 	}
 }
 /**
- * Collect all clients with the specified admin flag into the arraylist
+ * Collect all clients with the specified admin flag into the arraylist. Skips bots.
  * 
  * @param flag - the admin flag to check
  * @param clients - accumulator for clients
@@ -153,7 +155,7 @@ stock void MCP_FindClientsAlive(ArrayList clients, bool subtract=false, bool ali
 stock void MCP_FindClientsByFlag(AdminFlag flag, ArrayList clients, bool subtract=false) {
 	for (int client=1; client<=MaxClients; client++) {
 		AdminId admin;
-		if (IsClientInGame(client) && (admin=GetUserAdmin(client))!=INVALID_ADMIN_ID && admin.HasFlag(flag)) {
+		if (IsClientInGame(client) && !IsFakeClient(client) && (admin=GetUserAdmin(client))!=INVALID_ADMIN_ID && admin.HasFlag(flag)) {
 			if (subtract) {
 				int at;
 				while ((at=clients.FindValue(client)) != -1) clients.Erase(at);
@@ -165,7 +167,7 @@ stock void MCP_FindClientsByFlag(AdminFlag flag, ArrayList clients, bool subtrac
 }
 /**
  * Collect all clients with the specified access into the arraylist. as this is using
- * CheckCommandAccess, command can be an override.
+ * CheckCommandAccess, command can be an override. Skips bots.
  * 
  * @param command - the command or override to check
  * @param clients - accumulator for clients
@@ -174,7 +176,7 @@ stock void MCP_FindClientsByFlag(AdminFlag flag, ArrayList clients, bool subtrac
  */
 stock void MCP_FindClientsByAccess(const char[] command, ArrayList clients, bool subtract=false, bool override_only=false) {
 	for (int client=1; client<=MaxClients; client++) {
-		if (IsClientInGame(client) && CheckCommandAccess(client, command, 0, override_only)) {
+		if (IsClientInGame(client) && !IsFakeClient(client) && CheckCommandAccess(client, command, 0, override_only)) {
 			if (subtract) {
 				int at;
 				while ((at=clients.FindValue(client)) != -1) clients.Erase(at);
