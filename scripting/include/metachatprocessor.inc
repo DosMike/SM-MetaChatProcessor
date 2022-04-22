@@ -1,10 +1,8 @@
 #if defined _mcp_included
 #endinput
 #endif
-#define _mcp_included
-
+#define _mcp_included 221601
 //yywwrr: y year, w week in year, r revision in week
-#define MCP_VERSION 221501
 
 #include <metachatprocessor/types>
 
