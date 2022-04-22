@@ -1,5 +1,9 @@
 # Meta Chat Processor
 
+**Motivation:** The usual, existing chat-processors did not offer the feature set I required. At the same time I didn't want to drop existing plugins / configs that used previous chat-processors, so I naturally went for the most complex thing I could have done:
+Switch to private forwards and implement compatibility layers. Until now my other plugin implements a pretty rudimentary implementation of SCP forwards to allow CCC to work, while I change the chat format from AllChat/TeamChat to WorldChat/RegionChat (message 'target group' changes), but I can hopefully do it in a nicer way with MCP soon.
+I want to note that I tested MCP with both Custom-ChatColors and HexTags, both seem to work without any issues.
+
 This plugin is intended to merge, replace and extend some previous chat processors.
 With the difference to other chat processors, that I want to keep compatibility for plugins that depend on these chat processors to some degree.
 
