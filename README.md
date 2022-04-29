@@ -77,6 +77,7 @@ Called after the client specific format translations are applied and the message
 The message is sent and you may do some post sending cleanup.
 
 ## Other natives
+
 #### Manage Senderflags:
 With `MCP_RegisterSenderFlag` and `MCP_UnregisterSenderFlags` you can register custom sender flags.
 This is done by translation phrase and will return a flag bit. Since theres 32 bits in a cell, there's a global limit of 32 senderflag. These will be concatinated within asterisks in front of a chat message (default flags are `*DEAD*` and `*SPEC*`).
@@ -86,6 +87,10 @@ Using `MCP_RegisterTargetGroup` and `MCP_UnregisterTargetGroups` you can add cus
 Again, these use translation phrases but as only one target group can be used at a time, there can be almost any amount of target groups. Target groups are formatted between sender flags and username (default groups are `(TEAM)` or `(Spectator)`).
 Through the modular translation system you can exchange the `(TEAM)` prefix for named team prefixes like `(Terrorists)` or `(Survivors)` and vice versa.
 These groups are put into the enum in sequence, so checking for a team message can be done with this condition: `(mcpTargetTeam1 <= targetgroup <= mcpTargetTeamSender)`.
+
+#### Name Prefixes and Chat Colors
+Yes, MetaChatProcessor has natives to set the name prefix and chat color. I added it, as Drixevel's Chat-Processor has a whole tag system and it felt kind wrong to have that in the compat laryer but nothing comparable in Meta Chat-Processor itself.
+The name prefix combines tag color, tag string and name color as it's usually really only one value. The chat color is more stringly enforces to be a color instead of a chat prefix. The values are not stored and reset on connect.
 
 #### Manually Sending messages:
 You can bypass the SayText2 hook by calling `MCP_SendChat` directly. This allows you to easily create messages outside the normal format specifications.
