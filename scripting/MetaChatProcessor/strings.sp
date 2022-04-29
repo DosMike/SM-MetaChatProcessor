@@ -24,7 +24,7 @@
 #error Please compile the main file
 #endif
 
-#include <morecolors>
+#include <multicolors>
 
 /**
  * roughly check if the color is a valid color code, or a rgb/rgba color specifier, or and existing color name

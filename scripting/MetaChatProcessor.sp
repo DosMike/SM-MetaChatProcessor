@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w16a"
+#define PLUGIN_VERSION "22w17a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -378,7 +378,7 @@ static void ResendChatMessage() {
  * @param nEffectiveNameSz max length
  */
 static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char[] sGroupColor, int nGroupColorSz, char[] sEffectiveName, int nEffectiveNameSz) {
-	
+	//  sender flags format
 	for (int i=0, f=g_currentMessage.senderflags; i<32 && i<g_senderflagTranslations.Length && f; i+=1, f>>=1) {
 		if ((f&1)==0) continue;
 		char buffer[MCP_MAXLENGTH_TRANPHRASE];
@@ -386,33 +386,31 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 			tFlags.PushString(buffer);
 		}
 	}
-	if (tFlags.Length==0) g_currentMessage.senderflags = mcpSenderNone;
-	
+	if ( tFlags.Length==0 ) g_currentMessage.senderflags = mcpSenderNone;
+	//  target group format
 	if (g_currentMessage.group <= mcpTargetNone || !GetNthPhrase(g_groupTranslations, g_currentMessage.group, tGroup, nGroupSz)) {
 		g_currentMessage.group = mcpTargetNone;
 	}
 	
-	if ((g_currentMessage.options & mcpMsgGrouptagColor)) {
+	if ( (g_currentMessage.options & mcpMsgGrouptagColor) == mcpMsgGrouptagColor ) {
 		if (!ParseChatColor(g_currentMessage.customTagColor, sGroupColor, nGroupColorSz, g_currentMessage.sender)) {
 			g_currentMessage.options &=~ mcpMsgGrouptagColor; //no color provided
 		}
 	}
-	
+	//  name formatting
 	//perform message option transformations, as they are the same for all instances
-	if (g_currentMessage.options & mcpMsgProcessColors) {
+	if ( (g_currentMessage.options & mcpMsgProcessColors) == mcpMsgProcessColors ) {
 		CFormatColor(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender);
 		CFormatColor(g_currentMessage.message, sizeof(MessageData::message), g_currentMessage.sender);
 	}
-//	else if (g_currentMessage.options & mcpMsgRemoveColors) { //this is now done after pre to clean user input, not this late
-//		RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
-//	}
+	// mcpMsgRemoveColors is now done after pre to clean user input, not this late
 	
 	strcopy(sEffectiveName, nEffectiveNameSz, g_currentMessage.sender_display);
-	if (g_currentMessage.options & mcpMsgIgnoreNameColor) {
+	if ( (g_currentMessage.options & mcpMsgIgnoreNameColor) == mcpMsgIgnoreNameColor ) {
 		//we need to remove all color characters from the possibly tagged display name
 		RemoveTextColors(sEffectiveName, nEffectiveNameSz, false);
 	}
-	
+	//  pick the correct format template
 	// returns 0..3 as template index for all combinations
 	return (g_currentMessage.senderflags != mcpSenderNone ? 1 : 0) + (g_currentMessage.group != mcpTargetNone ? 2 : 0);
 }

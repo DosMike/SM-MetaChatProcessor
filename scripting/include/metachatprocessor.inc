@@ -1,7 +1,7 @@
 #if defined _mcp_included
 #endinput
 #endif
-#define _mcp_included 221601
+#define _mcp_included 221701
 //yywwrr: y year, w week in year, r revision in week
 
 #include <metachatprocessor/types>
@@ -45,6 +45,51 @@ native void MCP_UnregisterSenderFlags();
  * Remove your custom sender flags from the registry
  */
 native void MCP_UnregisterTargetGroups();
+
+/**
+ * Set the default client prefix to be used. This is usually applied after 
+ * mcpHookDefault and can be overwritten in mcpHookColors.
+ * The prefix combines tag color, tag name and name color. You need to provide
+ * spacing if desired.
+ * MCP is not providing any storage mechanism for prefixes.
+ * Internal buffer size is MCP_MAXLENGTH_NAME.
+ *
+ * @param client - the client index to set prefix on
+ * @param prefix - name prefix to use
+ */
+native void MCP_SetClientDefaultNamePrefix(int client, const char[] prefix);
+
+/**
+ * Read the default client prefix.
+ * 
+ * @param client - the client to retrieve
+ * @param prefix - buffer for the name prefix
+ * @param maxsize - you buffer size
+ * @see MCP_SetClientDefaultNamePrefix
+ */
+native void MCP_GetClientDefaultNamePrefix(int client, char[] prefix, int maxsize);
+
+/**
+ * Set the default client chat color to use. This is usually applied after 
+ * mcpHookDefault and can be overwritten in mcpHookColors.
+ * The only allows for valid color codes (\x...) or color tag names (without {}).
+ * MCP is not providing any storage mechanism for prefixes.
+ * Internal buffer size is MCP_MAXLENGTH_COLORTAG.
+ *
+ * @param client - the client index to set prefix on
+ * @param color - chat color to use
+ */
+native void MCP_SetClientDefaultChatColor(int client, const char[] color);
+
+/**
+ * Read the default client chat color.
+ * 
+ * @param client - the client to retrieve
+ * @param color - buffer for the color
+ * @param maxsize - you buffer size
+ * @see MCP_SetClientDefaultNamePrefix
+ */
+native void MCP_GetClientDefaultChatColor(int client, char[] color, int maxsize);
 
 //ok, so to make PrintToChat work properly, we would have to do the following:
 // * pre parse the message, and check if it roughly has the chat format

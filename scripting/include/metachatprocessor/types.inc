@@ -113,7 +113,7 @@ typeset ChatMessageCallback {
 	 * This is intended to be use to HOOK the processing of coloring the clients name, chat, etc.
 	 * You can set default tag, name and chat color directly! This is meant to change colors in specific cases or for compat plugins!
 	 * The result will be used to format the message as follows:
-	 *  *{flags}*{groupcolor optional}({group}) {nameTag optional} {displayName} : {chatColor}{message}
+	 *  *{flags}*{groupcolor optional}({group}) {prefix optional}{displayName} : {chatColor}{message}
 	 * 
 	 * @param sender - the client writing this chat message
 	 * @param senderflags - flags on what to contain in the ** string before a chat message
@@ -131,7 +131,7 @@ typeset ChatMessageCallback {
 	 * Allows you to late manipulate the message on a per-recipient basis, just before it's sent.
 	 * Note: This is only called for messages that were changed previously, as unchanged messages are pass-through and should use valve localizations.
 	 * The message is rougly formatted as follows:
-	 *  *{flags}*{groupcolor optional}({group}) {nameTag optional} {displayName} : {chatColor}{message}
+	 *  *{flags}*{groupcolor optional}({group}) {prefix optional}{displayName} : {chatColor}{message}
 	 * 
 	 * @param sender - the client writing this chat message
 	 * @param recipients - a list of clients receiving this chat message
