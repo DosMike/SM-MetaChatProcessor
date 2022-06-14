@@ -54,6 +54,9 @@ public void pluginAPI_register() {
 	CreateNative("MCP_SetClientDefaultChatColor", Native_SetChatColor);
 	CreateNative("MCP_GetClientDefaultChatColor", Native_GetChatColor);
 	
+	CreateNative("MCP_SetMessageData", Native_SetMsgData);
+	CreateNative("MCP_GetMessageData", Native_GetMsgData);
+	
 	RegPluginLibrary("MetaChatProcessor");
 }
 
@@ -137,6 +140,30 @@ static void ValidateAfterCall(const char[] stage, int error, Action& returnedAct
 	}
 	if (returnedAction == Plugin_Changed && rebuildMessageFormat)
 		BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
+	
+	//always strip and process colors
+	if (returnedAction == Plugin_Changed) {
+		if ( (g_currentMessage.options & mcpMsgRemoveColors) == mcpMsgRemoveColors ) {
+			//remove native colors from user input, keeping tags for maybe processing
+			// changes in display name will be picked up later
+			RemoveTextColors(g_currentMessage.sender_display, sizeof(MessageData::sender_display), false);
+			g_currentMessage.changed |= RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
+		}
+		if ( (g_currentMessage.options & mcpMsgProcessColors) == mcpMsgProcessColors ) {
+			CFormatColor(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender);
+			if (g_currentMessage.changed) {
+				//we already know the message changes, we can save ourselfs the strcopy and compare
+				CFormatColor(g_currentMessage.message, sizeof(MessageData::message), g_currentMessage.sender);
+			} else {
+				char compcpy[MAX_MESSAGE_LENGTH];
+				strcopy(compcpy, sizeof(compcpy), g_currentMessage.message);
+				CFormatColor(g_currentMessage.message, sizeof(MessageData::message), g_currentMessage.sender);
+				if (!StrEqual(g_currentMessage.message, compcpy)) g_currentMessage.changed = true;
+			}
+		}
+	}
+	//reset for the next forward
+	g_currentMessage.options &=~ (mcpMsgRemoveColors|mcpMsgProcessColors);
 }
 
 Action Call_OnChatMessagePre() {
@@ -322,7 +349,11 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	g_currentMessage.valid = true;
 	g_currentMessage.changed = true; //force resend
+	//temporarily allow newlines, this is a hack and should probably be done cleaner
+	bool wouldBan = (g_sanitizeInput & mcpInputBanNewline) == mcpInputBanNewline;
+	g_sanitizeInput &=~ mcpInputBanNewline;
 	ProcessSayText2();
+	if (wouldBan) g_sanitizeInput |= mcpInputBanNewline;
 }
 
 public int Native_SetNamePrefix(Handle plugin, int numParams) {
@@ -357,4 +388,29 @@ public int Native_GetChatColor(Handle plugin, int numParams) {
 		SetNativeString(2, clientChatColor[client], maxlen);
 	else
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+}
+
+public any Native_SetMsgData(Handle plugin, int numParams) {
+	if (!g_currentMessage.valid) ThrowNativeError(SP_ERROR_ABORTED, "There is currently no chat message processed!");
+	int at = g_currentMessage.userMessageData.FindValue(plugin, ExternalData::plugin);
+	if (at>=0) {
+		any value = g_currentMessage.userMessageData.Get(at, ExternalData::data);
+		g_currentMessage.userMessageData.Set(at, GetNativeCell(1), ExternalData::data);
+		return value;
+	} else {
+		ExternalData data;
+		data.plugin = plugin;
+		data.data = GetNativeCell(1);
+		g_currentMessage.userMessageData.PushArray(data);
+		return 0;
+	}
+}
+
+public any Native_GetMsgData(Handle plugin, int numParams) {
+	if (!g_currentMessage.valid) ThrowNativeError(SP_ERROR_ABORTED, "There is currently no chat message processed!");
+	int at = g_currentMessage.userMessageData.FindValue(plugin, ExternalData::plugin);
+	if (at>=0) {
+		return g_currentMessage.userMessageData.Get(at, ExternalData::data);
+	}
+	return 0;
 }

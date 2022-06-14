@@ -31,7 +31,7 @@ public Plugin myinfo = {
 	author = "reBane, based on SCP Redux, Chat-Processor and Cider",
 	description = "Process chat and allows other plugins to manipulate chat.",
 	version = PLUGIN_VERSION,
-	url = "http://forums.alliedmods.net"
+	url = "https://forums.alliedmods.net/showthread.php?t=337455"
 };
 
 #include "include/metachatprocessor/types.inc"
@@ -51,9 +51,11 @@ char clientChatColor[MAXPLAYERS+1][MCP_MAXLENGTH_COLORTAG];
 
 enum mcpCompatibility (<<=1) {
 	mcpCompatNone     = 0,
-	mcpCompatSCPRedux = 1, // Support for SCP Redux 2.3.0 - https://forums.alliedmods.net/showpost.php?p=2629088&postcount=413
-	mcpCompatDrixevel = 2, // Support for Drixevel's Chat Processor - https://forums.alliedmods.net/showthread.php?t=286913
-	mcpCompatCiderCP  = 4, // Support for CiderChatProcessor - https://forums.alliedmods.net/showthread.php?p=2646798
+	mcpCompatSCPRedux = (1<<0), // Support for SCP Redux 2.3.0 - https://forums.alliedmods.net/showpost.php?p=2629088&postcount=413
+	mcpCompatDrixevel = (1<<1), // Support for Drixevel's Chat Processor - https://forums.alliedmods.net/showthread.php?t=286913
+	mcpCompatCiderCP  = (1<<2), // Support for CiderChatProcessor - https://forums.alliedmods.net/showthread.php?p=2646798
+	mcpCompatCCC      = (1<<16), // Support for Custom Chat Colors - https://forums.alliedmods.net/showthread.php?p=1721580
+	mcpCompatHexTags  = (1<<17), // Support for HexTags - https://forums.alliedmods.net/showthread.php?p=2566623
 }
 mcpCompatibility g_compatLevel = mcpCompatNone;
 enum mcpTransportMethod (+=1) {
@@ -62,10 +64,21 @@ enum mcpTransportMethod (+=1) {
 }
 mcpTransportMethod g_messageTransport = mcpTransport_SayText; //how to send message
 bool g_fixCompatPostCalls = true; //always call OnChatMessagePost for scp?
+enum mcpInputSanity (<<=1) {
+	mcpInputUnchecked   = 0,
+	mcpInputTrimMBSpace = (1<<0), // Trim Multibyte spaces from messages; messages containing only spaces can break chat
+	mcpInputStripColors = (1<<1), // Strip native color codes by default (bytes < 32); game actually does this by default, chat-processors didn't
+	mcpInputBanNewline  = (1<<2), // NewLines cannot be input without hacked clients. Not in chat, not in console, not with copy paste, not with configs.
+}
+mcpInputSanity g_sanitizeInput = mcpInputUnchecked;
 
 enum struct ExternalPhrase {
 	Handle plugin;
 	char string[MCP_MAXLENGTH_TRANPHRASE];
+}
+enum struct ExternalData {
+	Handle plugin;
+	any data;
 }
 
 enum struct MessageData {
@@ -82,6 +95,7 @@ enum struct MessageData {
 	char message[MCP_MAXLENGTH_INPUT];
 	
 	ArrayList listRecipients; //other plugins can't close our handle, so we are fine using this
+	ArrayList userMessageData; //data bag for other plugins to attach data to the message during processing
 	
 	void Reset(bool newRecipientsInstace=false) {
 		this.valid = false;
@@ -97,6 +111,11 @@ enum struct MessageData {
 			this.listRecipients = new ArrayList();
 		} else {
 			this.listRecipients.Clear();
+		}
+		if (this.userMessageData==null || newRecipientsInstace) {
+			this.userMessageData = new ArrayList(sizeof(ExternalData));
+		} else {
+			this.userMessageData.Clear();
 		}
 	}
 }
@@ -118,6 +137,8 @@ ArrayList g_senderflagTranslations;
 #include "MetaChatProcessor/compat_scpredux.sp"
 #include "MetaChatProcessor/compat_drixevel.sp"
 #include "MetaChatProcessor/compat_cider.sp"
+#include "MetaChatProcessor/compat_ccc.sp"
+#include "MetaChatProcessor/compat_hextags.sp"
 
 /* -------------------- Main Plugin Code -------------------- */
 
@@ -187,7 +208,8 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	g_currentMessage.sender = buf.ReadInt("ent_idx");
 	if (!g_currentMessage.sender) return Plugin_Continue;
 	g_currentMessage.options = buf.ReadBool("chat") ? mcpMsgDefault : mcpMsgNoConsoleCopy;
-	g_currentMessage.options |= mcpMsgRemoveColors; //by default the game does not allow colors
+	//by default the game does not allow colors, we let config decide
+	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
 	buf.ReadString("msg_name", g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	
 	buf.ReadString("params", g_currentMessage.sender_name, sizeof(MessageData::sender_name), 0);
@@ -204,7 +226,6 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	}
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-	g_currentMessage.valid = true;
 	return ProcessSayText2();
 }
 public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
@@ -213,7 +234,8 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	g_currentMessage.sender = msg.ReadByte();
 	if (!g_currentMessage.sender) return Plugin_Continue;
 	g_currentMessage.options = msg.ReadByte() ? mcpMsgDefault : mcpMsgNoConsoleCopy;
-	g_currentMessage.options |= mcpMsgRemoveColors; //by default the game does not allow colors
+	//by default the game does not allow colors, we let config decide
+	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
 	
 	msg.ReadString(g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.sender_name, sizeof(MessageData::sender_name));
@@ -230,55 +252,70 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	}
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-	g_currentMessage.valid = true;
 	return ProcessSayText2();
 }
 
 Action ProcessSayText2() {
 	Action result;
+	g_currentMessage.valid = true;
+#define THEN_CANCEL { g_currentMessage.valid = true; return Plugin_Handled; }
 	
-	//kill empty messages. should we do this as chat processor?
-	//A strlen 0 message is not sent, so I'd say this is intended default behaviour
-	{	char tmp[MCP_MAXLENGTH_INPUT];
+	//this is some basic chat sanitizing. should we do this as chat processor?
+	// i think most server operators wont event know this can be an issue, and
+	// as they wouldn't look for it otherwise i'll do it.
+	// - Drop empty messages (vanilla behaviour)
+	// - Ban if the chat input contains newlines and configured, clear them otherwise.
+	//   THIS CAN BAN CLIENTS IF A FAKE MESSAGE WITH NEWLINES IS SENT!
+	//   The API call is temporarily removing this flag to prevent false bans
+	// - Copy back the multibyte whitespace trimmed message if configured
+	{
+		bool hasNewLines=false;
+		char tmp[MCP_MAXLENGTH_INPUT];
 		strcopy(tmp, sizeof(tmp), g_currentMessage.message);
-		if (TrimStringMB(tmp) && tmp[0]==0)
-			return Plugin_Handled; //message is empty or a "break chat" message
+		for (int c=strlen(tmp)-1; c>=0; c--) {
+			if (tmp[c] == '\n' || tmp[c] == '\r') {
+				tmp[c] = ' '; //defo replace these as they get used to break chat by hacks
+				hasNewLines = true;
+			}
+		}
+		if (hasNewLines && (g_sanitizeInput & mcpInputBanNewline)) {
+			BanClient(g_currentMessage.sender, 0, BANFLAG_AUTHID|BANFLAG_AUTO, "Hacked Client: Invalid characters in chat input (line breaks)", "Hacked client detected", "say", g_currentMessage.sender);
+			return Plugin_Handled;
+		}
+		if (TrimStringMB(tmp) && tmp[0]==0) THEN_CANCEL //message is empty or a "break chat" message
+		if (g_sanitizeInput & mcpInputTrimMBSpace) strcopy(g_currentMessage.message, sizeof(MessageData::message), tmp);
 	}
 	
 	//mcpHookPre
 	result = Call_OnChatMessagePre();
-	if (result >= Plugin_Handled) return Plugin_Handled;
+	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
-	
-	//remove native colors from user input, keeping tags for maybe processing?
-	if (g_currentMessage.options & mcpMsgRemoveColors) {
-		RemoveTextColors(g_currentMessage.sender_display, sizeof(MessageData::sender_display), false);
-		//^ changes in display name will be picked up later
-		g_currentMessage.changed |= RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
-	}
 	
 	//processing message hooks (early)
 	result = Call_OnChatMessage(-1);
-	if (result >= Plugin_Handled) return Plugin_Handled;
+	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
 	//processing message hooks (normal)
 	//ccc/drixevel technically apply color to messages in the normal hook...
 	result = Call_OnChatMessage(0);
-	if (result >= Plugin_Handled) return Plugin_Handled;
+	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
+	
 	//...but default colors are added after, if missing, so i guess i'll just do it here?
 	g_currentMessage.changed |= ApplyClientChatColors(); //process colors. this applies prefix and colors if not already done
 	
 	//processing message hooks (late)
 	result = Call_OnChatMessage(1); //can still change colors if wanted i guess
-	if (result >= Plugin_Handled) return Plugin_Handled;
+	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
 	result = g_currentMessage.changed ? Plugin_Handled : Plugin_Continue;
 	//send of to next frame as we can't create another user message within this hook
 	g_processedMessages.PushArray(g_currentMessage);
-	g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle
+	g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle, sets valid false
+	
+#undef THEN_CANCEL
 	return result;
 }
 //continuation
@@ -293,8 +330,10 @@ public void OnGameFrame() {
 		// process message
 		//if this failes we hopefully threw an error and will continue processing
 		//other messages in the next game tick, as this one was already dequeued
+		g_currentMessage.valid = true;
 		if (g_currentMessage.changed) ResendChatMessage();
 		Call_OnChatMessagePost();
+		g_currentMessage.valid = false;
 	}
 	//we still have an old recipients list here that wasn't deleted. this instance
 	//will be cleared and reused by the next SayText2 hook
@@ -398,12 +437,10 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 		}
 	}
 	//  name formatting
-	//perform message option transformations, as they are the same for all instances
-	if ( (g_currentMessage.options & mcpMsgProcessColors) == mcpMsgProcessColors ) {
-		CFormatColor(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender);
-		CFormatColor(g_currentMessage.message, sizeof(MessageData::message), g_currentMessage.sender);
-	}
-	// mcpMsgRemoveColors is now done after pre to clean user input, not this late
+	
+	//perform message option transformations, as they are the same for all instances.
+	// stripping native colors and processing tags is now done after every stage
+	// if the flag is set, allowing for a more dynamic processing.
 	
 	strcopy(sEffectiveName, nEffectiveNameSz, g_currentMessage.sender_display);
 	if ( (g_currentMessage.options & mcpMsgIgnoreNameColor) == mcpMsgIgnoreNameColor ) {

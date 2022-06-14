@@ -91,6 +91,37 @@ native void MCP_SetClientDefaultChatColor(int client, const char[] color);
  */
 native void MCP_GetClientDefaultChatColor(int client, char[] color, int maxsize);
 
+/**
+ * Attach some data to this message for you to retreived again later.
+ * The data is keyed and private to your plugin.
+ * If you set a Handle, remeber to close it again in Post!
+ *
+ * @param data - data to attach
+ * @return the previously set data (default 0)
+ */
+native any MCP_SetMessageData(any data);
+
+/**
+ * Get some data you attached to this message earlier.
+ * The data is keyed and private to your plugin.
+ * If you set a Handle, remeber to close it again in Post!
+ * 
+ * @return the previously set data (default 0)
+ */
+native any MCP_GetMessageData();
+
+/**
+ * Retrieve the formatted client name. This will use the MCP default format.
+ * If SCP/CCC or DCP/HexTags is installed it will retrieve those formats.
+ * Result should be <Prefix><Name>\x01.
+ * 
+ * @param client - The client to format the name for
+ * @param buffer - output buffer to put the name into
+ * @param maxlen - the size of the buffer
+ * @return number of bytes written
+ */
+native int MCP_FormatPlayerName(int client, char[] buffer, int maxlen);
+
 //ok, so to make PrintToChat work properly, we would have to do the following:
 // * pre parse the message, and check if it roughly has the chat format
 //  *words*(words) name : message
@@ -298,5 +329,13 @@ public void __pl_MetaChatProcessor_SetNTVOptional() {
 	MarkNativeAsOptional("MCP_UnregisterSenderFlags");
 	MarkNativeAsOptional("MCP_UnregisterTargetGroups");
 	MarkNativeAsOptional("MCP_SendChat");
+	
+	MarkNativeAsOptional("MCP_SetClientDefaultNamePrefix");
+	MarkNativeAsOptional("MCP_GetClientDefaultNamePrefix");
+	MarkNativeAsOptional("MCP_SetClientDefaultChatColor");
+	MarkNativeAsOptional("MCP_GetClientDefaultChatColor");
+	
+	MarkNativeAsOptional("MCP_SetMessageData");
+	MarkNativeAsOptional("MCP_GetMessageData");
 }
 #endif

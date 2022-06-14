@@ -58,14 +58,28 @@ void LoadCompatConfig() {
 		LogError("[MCP] Configuration is broken, please regenerate it!");
 		return;
 	}
-	
+	//load some defaults before we parse over actual values
+	g_compatLevel = mcpCompatNone;
+	g_sanitizeInput = mcpInputUnchecked;
+	g_fixCompatPostCalls = false;
+	g_messageTransport = mcpTransport_SayText;
+	//compat
 	if (kv.JumpToKey("Compatibility")) { //jump to key goes into the section
 		if (kv.GetNum("SCP Redux")>0) g_compatLevel |= mcpCompatSCPRedux;
 		if (kv.GetNum("Drixevel")>0) g_compatLevel |= mcpCompatDrixevel;
 		if (kv.GetNum("Cider")>0) g_compatLevel |= mcpCompatCiderCP;
+		if (kv.GetNum("Custom-ChatColors")>0) g_compatLevel |= mcpCompatCCC;
+		if (kv.GetNum("HexTags")>0) g_compatLevel |= mcpCompatHexTags;
 		g_fixCompatPostCalls = (kv.GetNum("Fix Post Calls")>0);
 		kv.GoBack();
 	} else LogError("[MCP] 'Compatibility' section missing from config");
+	//input sanitizer
+	if (kv.JumpToKey("Input Sanitizer")) {
+		if (kv.GetNum("Trim All Whitespaces")>0) g_sanitizeInput |= mcpInputTrimMBSpace;
+		if (kv.GetNum("Ban On NewLine")>0) g_sanitizeInput |= mcpInputBanNewline;
+		if (kv.GetNum("Strip Native Colorcodes")>0) g_sanitizeInput |= mcpInputStripColors;
+	} else LogError("[MCP] 'Input Sanitizer' section missing from config");
+	//transport method
 	if (kv.GetDataType("Transport")==KvData_String) {
 		kv.GetString("Transport", part, sizeof(part), "SayText");
 		if (StrEqual(part, "PrintToChat", false)) {
@@ -80,7 +94,11 @@ void LoadCompatConfig() {
 }
 
 static void GenerateDefaultConfig(KeyValues kv, const char[] path) {
-	kv.ImportFromString("config { Compatibility { \"SCP Redux\" 1 Drixevel 1 Cider 1 \"Fix Post Calls\" 0 } Transport SayText }");
+	kv.ImportFromString("config { "...
+		"Compatibility { \"SCP Redux\" 1 Drixevel 1 Cider 1 \"Custom-ChatColors\" 0 HexTags 0 \"Fix Post Calls\" 0 } "...
+		"Transport SayText "...
+		"\"Input Sanitizer\" { \"Trim All Whitespaces\" 1 \"Ban On NewLine\" 1 \"Strip Native Colorcodes\" 1 } "...
+		"}");
 	kv.ExportToFile(path);
 }
 
