@@ -142,8 +142,9 @@ native int MCP_FormatPlayerName(int client, char[] buffer, int maxlen);
  * MCP_SendChat(author, recipients, "Hello There", mcpSenderDead, mcpTargetAdmin, mcpMsgGrouptagColor|mcpMsgIgnoreNameColor, "\x04");
  *  This call has no guarantee that the message will actually arrive at the
  *  recipients as the chat processor hooks might block it.
+ * Can immediately set the custom data for the calling plugin.
  */
-native void MCP_SendChat(int author, ArrayList recipients, const char[] message, mcpSenderFlag flags = mcpSenderNone, mcpTargetGroup group = mcpTargetNone, mcpMessageOption options = mcpMsgDefault, const char[] tagColor = "");
+native void MCP_SendChat(int author, ArrayList recipients, const char[] message, mcpSenderFlag flags = mcpSenderNone, mcpTargetGroup group = mcpTargetNone, mcpMessageOption options = mcpMsgDefault, const char[] tagColor = "", any data=0);
 
 /**
  * If you want to transform messages using color tags you might want to use this,
@@ -244,13 +245,14 @@ stock void MCP_FindClientsByFlag(AdminFlag flag, ArrayList clients, bool subtrac
  * CheckCommandAccess, command can be an override. Skips bots.
  * 
  * @param command - the command or override to check
+ * @param flags - like CheckCommandAccess, fallback flag to check for when command or overwrite was not found
  * @param clients - accumulator for clients
  * @param subtract - remove the clients from the accumulator, instead of adding one
  * @param override_only - passed to CheckCommandAccess; don't check commands
  */
-stock void MCP_FindClientsByAccess(const char[] command, ArrayList clients, bool subtract=false, bool override_only=false) {
+stock void MCP_FindClientsByAccess(const char[] command, int flags, ArrayList clients, bool subtract=false, bool override_only=false) {
 	for (int client=1; client<=MaxClients; client++) {
-		if (IsClientInGame(client) && !IsFakeClient(client) && CheckCommandAccess(client, command, 0, override_only)) {
+		if (IsClientInGame(client) && !IsFakeClient(client) && CheckCommandAccess(client, command, flags, override_only)) {
 			if (subtract) {
 				int at;
 				while ((at=clients.FindValue(client)) != -1) clients.Erase(at);

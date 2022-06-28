@@ -6,7 +6,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w16a"
+#define PLUGIN_VERSION "22w26a"
 
 public Plugin myinfo = {
 	name = "SayRedirects",
@@ -58,7 +58,7 @@ public void OnConVarChanged_DeadChat(ConVar convar, const char[] oldValue, const
 public Action OnMessage_Redirect(int& sender, ArrayList recipients, mcpSenderFlag& senderflags, mcpTargetGroup& targetgroup, mcpMessageOption& options, char[] targetgroupColor) {
 	bool isTeamSay = mcpTargetTeam1 <= targetgroup <= mcpTargetTeamSender;
 	bool isDeadChat = (senderflags & mcpSenderDead)!=mcpSenderNone;
-	int fromTeam = GetClientTeam(sender);
+	int fromTeam = sender ? GetClientTeam(sender) : 0;
 	
 	//true if this message stays withing the senders team
 	bool checkTeam = isTeamSay;

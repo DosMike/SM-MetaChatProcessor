@@ -50,7 +50,8 @@ enum mcpTargetGroup {
 	mcpTargetTeamSender   = 6, /* sender team, e.g. (TEAM) */
 	mcpTargetAll          = 7, /* Non-standard special highlighted /chat or @message, e.g. (ALL) */
 	mcpTargetAdmin        = 8, /* Non-standard special admin chat, e.g. (ADMIN) */
-	mcpTargetDirect       = 9, /* Non-standard special private message, e.g. (DM) */
+	mcpTargetToAdmin      = 9, /* Non-standard special admin notify chat, e.g. (TO ADMIN) */
+	mcpTargetDirect       = 10, /* Non-standard special private message, e.g. (DM) */
 	/* other values should be treated as custom, not invalid */
 }
 
