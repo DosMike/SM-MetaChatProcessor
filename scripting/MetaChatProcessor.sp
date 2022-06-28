@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w17a"
+#define PLUGIN_VERSION "22w26a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
