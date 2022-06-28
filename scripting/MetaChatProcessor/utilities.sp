@@ -131,6 +131,7 @@ static bool AutoLoadTranslations(const char[] translation) {
 	PushPhraseToList(g_groupTranslations, "Group_Team"); //mcpTargetTeamSender
 	PushPhraseToList(g_groupTranslations, "Group_All"); //mcpTargetAll
 	PushPhraseToList(g_groupTranslations, "Group_Admin"); //mcpTargetAdmin
+	PushPhraseToList(g_groupTranslations, "Group_ToAdmin"); //mcpTargetToAdmin
 	PushPhraseToList(g_groupTranslations, "Group_Direct"); //mcpTargetDirect
 	
 	g_senderflagTranslations = new ArrayList(sizeof(ExternalPhrase));

@@ -122,7 +122,6 @@ public void OnAllPluginsLoaded() {
 		mcp_cider_pluginsloaded();
 }
 
-
 // -------------------- FORWARD WRAPPER --------------------
 
 /**
@@ -298,8 +297,9 @@ public int Native_HookChatMessage(Handle plugin, int numParams) {
 		case 2: g_fwdOnMessage_Normal.AddFunction(plugin, fun);
 		case 3: g_fwdOnMessage_Late.AddFunction(plugin, fun);
 		case 4: g_fwdOnMessageColors.AddFunction(plugin, fun);
-		case 5: g_fwdOnMessageFormatted.AddFunction(plugin, fun);
-		case 6: g_fwdOnMessagePost.AddFunction(plugin, fun);
+		case 5: g_fwdOnMessageGroupName.AddFunction(plugin, fun);
+		case 6: g_fwdOnMessageFormatted.AddFunction(plugin, fun);
+		case 7: g_fwdOnMessagePost.AddFunction(plugin, fun);
 		default: ThrowNativeError(SP_ERROR_PARAM, "Invalid hook type");
 	}
 }
@@ -340,8 +340,7 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	
 	// build up current message data
 	g_currentMessage.Reset();
-	if (!sender) ThrowNativeError(SP_ERROR_INDEX, "Server not supported as Sender");
-	else if (!(1<=sender<=MaxClients)) ThrowNativeError(SP_ERROR_INDEX, "Invalid client index");
+	if (!(0<=sender<=MaxClients)) ThrowNativeError(SP_ERROR_INDEX, "Invalid sender index");
 	g_currentMessage.sender = sender;
 	if (orec == INVALID_HANDLE) {
 		for (int client=1;client<=MaxClients;client++) {
@@ -376,6 +375,14 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	g_currentMessage.valid = true;
 	g_currentMessage.changed = true; //force resend
+	//shimmy in custom data
+	any pluginData = GetNativeCell(8);
+	if (pluginData != 0) {
+		ExternalData data;
+		data.plugin = plugin;
+		data.data = pluginData;
+		g_currentMessage.userMessageData.PushArray(data);
+	}
 	//temporarily allow newlines, this is a hack and should probably be done cleaner
 	bool wouldBan = (g_sanitizeInput & mcpInputBanNewline) == mcpInputBanNewline;
 	g_sanitizeInput &=~ mcpInputBanNewline;

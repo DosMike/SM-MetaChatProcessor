@@ -4,13 +4,18 @@
 	{
 		"en"	"ADMIN"
 	}
+	"Group_ToAdmin"
+	{
+		"en"	"TO ADMIN"
+	}
 	"Group_All"
 	{
 		"en"	"ALL"
 	}
 	"Group_Direct"
 	{
-		"en"	"DM"
+		"#format"	"{1:N}"
+		"en"	"Private to {1}"
 	}
 	"Group_Spectator"
 	{

@@ -54,8 +54,13 @@
 	{
 		"en"	"ADMIN"
 	}
+	"Group_ToAdmin"
+	{
+		"en"	"TO ADMIN"
+	}
 	"Group_Direct"
 	{
-		"en"	"DM"
+		"#format"	"{1:N}"
+		"en"	"Private to {1}"
 	}
 }
