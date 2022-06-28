@@ -70,8 +70,9 @@ enum mcpHookType (+=1) {
 	mcpHookDefault   = 2, //normal message hook
 	mcpHookLate      = 3, //late message hook. ONLY USE IF DEFAULT IS TOO EARLY!
 	mcpHookColor     = 4, //name tag and default chat colors are applied
-	mcpHookFormatted = 5, //per-recipient callback for changed(!) messages
-	mcpHookPost      = 6, //message left the server
+	mcpHookGroupName = 5, //called during formatting, in case your group name uses templates
+	mcpHookFormatted = 6, //per-recipient callback for changed(!) messages
+	mcpHookPost      = 7, //message left the server
 }
 
 typeset ChatMessageCallback {
@@ -125,6 +126,22 @@ typeset ChatMessageCallback {
 	 * @return Plugin_Handled will block changes, Plugin_Stop will strip colors!
 	 */
 	function Action (int sender, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, char[] nameTag, char[] displayName, char[] chatColor);
+	
+	/**
+	 * mcpHookGroupName:
+	 * Fill complex translations for target group names
+	 * This will be called withing message formatting when the group index is resolved to a language string and then to the client specific translation.
+	 * If no plugin changes this, the translation will be fetched as Format(group,sizeof(group), "%T", groupphrase, recipient).
+	 *
+	 * @param sender - the author for this chat message
+	 * @param recipient - the client this message is currently formatted for
+	 * @param senderflags - flags on what to contain in the ** string before a chat message
+	 * @param targetgroup - the group that this message is directed to, displayed in () before a chat message
+	 * @param groupphrase - the translation phrase for this targetgroup
+	 * @param groupname - your client format for groupphrase (out, default empty, sized MCP_MAXLENGTH_TRANPHRASE)
+	 * @return Plugin_Changed if you set groupname, Plugin_Continue to use default format
+	 */
+	function Action (int sender, int recipient, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, const char[] groupphrase, char[] groupname);
 	
 	/**
 	 * mcpHookFormatted:

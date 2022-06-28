@@ -21,6 +21,10 @@ PrivateForward g_fwdOnMessage_Late;
  * f(sender, senderflags, group, options, &nameTag, &displayName, &chatColor)
  */
 PrivateForward g_fwdOnMessageColors;
+/** Forward to fill additional placeholders in groupname translation phrases
+ * f(sender, recipient, senderflags, targetgroup, groupphrase, groupname)
+ */
+PrivateForward g_fwdOnMessageGroupName;
 /* From just chat-processor, before the message is sent. contained the translated & formatted message and called for every target
  * Why does chat-processor allow last minute edits? I don't fully understand
  * f(sender, recipient, sendflags, group, options, buffer, buffersize);
@@ -85,6 +89,11 @@ void pluginAPI_init() {
 		Param_CellByRef, Param_Cell, //sender, recipients
 		Param_CellByRef, Param_CellByRef, Param_CellByRef, Param_String, //senderflags, group, options, groupcolor
 		Param_String, Param_String, Param_String); //prefix, name, chatcolor
+	//MCP_OnChatMessageGroupName
+	g_fwdOnMessageGroupName = new PrivateForward(ET_Event,
+		Param_Cell, Param_Cell, //sender, recipient
+		Param_Cell, Param_Cell, //senderflags, group
+		Param_String, Param_String); //groupphrase, groupname
 	//MCP_OnChatMessageFormatted
 	g_fwdOnMessageFormatted = new PrivateForward(ET_Event, 
 		Param_Cell, Param_Cell, //sender, recipients
@@ -228,6 +237,23 @@ Action Call_OnChatMessageColors(char[] nameTag, char[] displayName, char[] chatC
 	return result;
 }
 
+Action Call_OnChatMessageGroupName(int target, const char[] groupphrase, char[] groupname) {
+	if (!g_fwdOnMessageGroupName.FunctionCount) return Plugin_Continue;
+	
+	Call_StartForward(g_fwdOnMessageGroupName);
+	Call_PushCell(g_currentMessage.sender);
+	Call_PushCell(target);
+	Call_PushCell(g_currentMessage.senderflags);
+	Call_PushCell(g_currentMessage.group);
+	Call_PushString(groupphrase);
+	Call_PushStringEx(groupname, MCP_MAXLENGTH_TRANPHRASE, SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Action result;
+	int error = Call_Finish(result);
+	
+	ValidateAfterCall("GroupName", error);
+	return result;
+}
+
 Action Call_OnChatMessageFormatted(int target, char[] message, int maxlen) {
 	if (!g_fwdOnMessageFormatted.FunctionCount) return Plugin_Continue;
 	
@@ -318,10 +344,11 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	else if (!(1<=sender<=MaxClients)) ThrowNativeError(SP_ERROR_INDEX, "Invalid client index");
 	g_currentMessage.sender = sender;
 	if (orec == INVALID_HANDLE) {
-		for (int client=1;client<=MaxClients;client++)
+		for (int client=1;client<=MaxClients;client++) {
 			if (IsClientInGame(client)) {
 				g_currentMessage.listRecipients.Push(client);
 			}
+		}
 	} else {
 		for (int at;at<orec.Length;at++) {
 			int client = orec.Get(at);

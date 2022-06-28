@@ -355,12 +355,7 @@ static void ResendChatMessage() {
 		if (!recipient) continue;
 		
 		//because i made the prefixes transalteable, we need to format for every player
-		FormatChatMessage(recipient, message, sizeof(message), template, tFlags, tGroup, tGroupColor, sEffectiveName);
-		//notify that we just formatted the message
-		Action result = Call_OnChatMessageFormatted(recipient, message, sizeof(message));
-		if (result >= Plugin_Handled) {
-			continue;
-		}
+		if (!FormatChatMessage(recipient, message, sizeof(message), template, tFlags, tGroup, tGroupColor, sEffectiveName)) continue;
 		
 		//send a single targeted message
 		if (g_messageTransport == mcpTransport_PrintToChat) {
@@ -452,7 +447,7 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 	return (g_currentMessage.senderflags != mcpSenderNone ? 1 : 0) + (g_currentMessage.group != mcpTargetNone ? 2 : 0);
 }
 
-static void FormatChatMessage(int client, char[] message, int maxlen, int template, ArrayList tFlags, const char[] tGroup, const char[] tGroupColor, const char[] sEffectiveName) {
+static bool FormatChatMessage(int client, char[] message, int maxlen, int template, ArrayList tFlags, const char[] tGroup, const char[] tGroupColor, const char[] sEffectiveName) {
 	
 	char flags[33]; //skip first comma with 1 index
 	for (int i=0; i<tFlags.Length; i++) {
@@ -461,9 +456,10 @@ static void FormatChatMessage(int client, char[] message, int maxlen, int templa
 		Format(flags, sizeof(flags), "%s,%T", flags, buffer, client);
 	}
 	
-	char group[32];
+	char group[MCP_MAXLENGTH_TRANPHRASE];
 	if (tGroup[0]) {
-		FormatEx(group, sizeof(group), "%T", tGroup, client);
+		if (Call_OnChatMessageGroupName(client, tGroup, group) == Plugin_Continue)
+			FormatEx(group, sizeof(group), "%T", tGroup, client);
 	}
 	
 	//note: formats already specify a color as first char, we don't need to do that
@@ -491,6 +487,10 @@ static void FormatChatMessage(int client, char[] message, int maxlen, int templa
 		int offset = GetNativeColor(message);
 		CollapseColors(message[offset], maxlen-offset);
 	}
+	
+	//notify that we just formatted the message
+	Action result = Call_OnChatMessageFormatted(client, message, MCP_MAXLENGTH_MESSAGE);
+	return result < Plugin_Handled;
 	
 }
 
