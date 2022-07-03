@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w26b"
+#define PLUGIN_VERSION "22w26c"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -166,8 +166,10 @@ public void OnPluginStart() {
 	
 	UserMsg userMessage;
 	if ((userMessage = GetUserMessageId("SayText2")) != INVALID_MESSAGE_ID) {
-		if (g_bUseProtobuf) HookUserMessage(userMessage, OnUserMessage_SayText2Proto, true);
-		else HookUserMessage(userMessage, OnUserMessage_SayText2BB, true);
+		if (g_bUseProtobuf)
+			HookUserMessage(userMessage, OnUserMessage_SayText2Proto, true);
+		else
+			HookUserMessage(userMessage, OnUserMessage_SayText2BB, true);
 	//} else if ((userMessage = GetUserMessageId("SayText")) != INVALID_MESSAGE_ID) {
 		//SCP only supported dods? maybe add that if people ask for it
 	} else {
@@ -221,6 +223,7 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	// copy as initial display name
 	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
 	
+	g_currentMessage.listRecipients.Clear();
 	for (int reci=0;reci<playersNum;reci++) {
 		g_currentMessage.listRecipients.Push(players[reci]);
 	}
@@ -247,6 +250,7 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	// copy as initial display name
 	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
 	
+	g_currentMessage.listRecipients.Clear();
 	for (int reci=0;reci<playersNum;reci++) {
 		g_currentMessage.listRecipients.Push(players[reci]);
 	}
@@ -258,7 +262,7 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 Action ProcessSayText2() {
 	Action result;
 	g_currentMessage.valid = true;
-#define THEN_CANCEL { g_currentMessage.valid = true; return Plugin_Handled; }
+#define THEN_CANCEL { g_currentMessage.valid = false; return Plugin_Handled; }
 	
 	//this is some basic chat sanitizing. should we do this as chat processor?
 	// i think most server operators wont event know this can be an issue, and
@@ -282,7 +286,8 @@ Action ProcessSayText2() {
 			BanClient(g_currentMessage.sender, 0, BANFLAG_AUTHID|BANFLAG_AUTO, "Hacked Client: Invalid characters in chat input (line breaks)", "Hacked client detected", "say", g_currentMessage.sender);
 			return Plugin_Handled;
 		}
-		if (TrimStringMB(tmp) && tmp[0]==0) THEN_CANCEL //message is empty or a "break chat" message
+		TrimStringMB(tmp);
+		if (tmp[0]==0) THEN_CANCEL //message is empty or a "break chat" message
 		if (g_sanitizeInput & mcpInputTrimMBSpace) strcopy(g_currentMessage.message, sizeof(MessageData::message), tmp);
 	}
 	
@@ -312,31 +317,49 @@ Action ProcessSayText2() {
 	
 	result = g_currentMessage.changed ? Plugin_Handled : Plugin_Continue;
 	//send of to next frame as we can't create another user message within this hook
-	g_processedMessages.PushArray(g_currentMessage);
-	g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle, sets valid false
+	for (int rec=g_currentMessage.listRecipients.Length-1;rec>=0;rec--) {
+		//map client ids to user-ids since we are about to cross tick boundary
+		int recipient = g_currentMessage.listRecipients.Get(rec);
+		if (!recipient) continue;
+		g_currentMessage.listRecipients.Set(rec, GetClientUserId( recipient ));
+	}
+	g_processedMessages.PushArray(g_currentMessage); //push with .valid = true
+	g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle, sets .valid false
 	
 #undef THEN_CANCEL
 	return result;
 }
 //continuation
 public void OnGameFrame() {
-	for (int index; index < g_processedMessages.Length; index++) {
+	while (g_processedMessages.Length > 0) {
 		// pop message
 		//delete the previous handle, we will fetch an old one from the list
 		delete g_currentMessage.listRecipients;
-		g_processedMessages.GetArray(index, g_currentMessage);
-		g_processedMessages.Erase(index);
+		g_processedMessages.GetArray(0, g_currentMessage);
+		g_processedMessages.Erase(0);
+		//re-map recipients from uids to clients
+		for (int i=g_currentMessage.listRecipients.Length-1; i>=0; i-=1) {
+			int recipient = g_currentMessage.listRecipients.Get(i);
+			if (!recipient) continue; //don't touch server recipient, that's always 0
+			recipient = GetClientOfUserId(recipient); // validate
+			if (recipient) g_currentMessage.listRecipients.Set(i, recipient);
+			else g_currentMessage.listRecipients.Erase(i);
+		}
 		
 		// process message
 		//if this failes we hopefully threw an error and will continue processing
 		//other messages in the next game tick, as this one was already dequeued
-		g_currentMessage.valid = true;
-		if (g_currentMessage.changed) ResendChatMessage();
-		Call_OnChatMessagePost();
-		g_currentMessage.valid = false;
+		if (g_currentMessage.valid) {
+			if (g_currentMessage.changed) ResendChatMessage();
+			Call_OnChatMessagePost();
+		} else {
+			LogError("Pushed or didnt clear invalid message! %N :  %s", g_currentMessage.sender, g_currentMessage.message);
+		}
 	}
 	//we still have an old recipients list here that wasn't deleted. this instance
 	//will be cleared and reused by the next SayText2 hook
+	//until then, the message structure is invalid tho
+	g_currentMessage.valid = false;
 }
 
 static void ResendChatMessage() {
@@ -350,7 +373,7 @@ static void ResendChatMessage() {
 	bool chatFlag = !(g_currentMessage.options & mcpMsgNoConsoleCopy);
 	
 	int recipientCount = g_currentMessage.listRecipients.Length;
-	for (int i; i < recipientCount; i++) {
+	for (int i; i < recipientCount; i+=1) {
 		int recipient = g_currentMessage.listRecipients.Get(i);
 		if (!recipient) continue;
 		

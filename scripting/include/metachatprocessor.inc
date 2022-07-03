@@ -1,7 +1,7 @@
 #if defined _mcp_included
 #endinput
 #endif
-#define _mcp_included 222601
+#define _mcp_included 222603
 //yywwrr: y year, w week in year, r revision in week
 
 #include <metachatprocessor/types>
@@ -14,6 +14,23 @@
  * @noreturn
  */
 native void MCP_HookChatMessage(ChatMessageCallback callback, mcpHookType type=mcpHookDefault);
+
+/**
+ * Remove a message callback from MCP. If you pass INVALID_FUNCTION it will unhook all callbacks for the specified type.
+ * 
+ * @param callback - the function to remove OR INVLID_FUNCTION to remove all
+ * @param type - what type the callback was added to
+ * @noreturn
+ */
+native void MCP_UnhookChatMessage(ChatMessageCallback callback=INVALID_FUNCTION, mcpHookType type=mcpHookDefault);
+
+/**
+ * Completely removes all hooks you added. If you wanna be extra sure, you can put this in OnPluginEnd, but normally
+ * this shouldn't be required.
+ * 
+ * @noreturn
+ */
+native void MCP_UnhookAllChatMessages();
 
 /**
  * Add a translation phrase for a custom sender flag prefix.

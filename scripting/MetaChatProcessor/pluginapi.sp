@@ -47,6 +47,8 @@ public void pluginAPI_register() {
 		mcp_cider_init();
 	
 	CreateNative("MCP_HookChatMessage", Native_HookChatMessage);
+	CreateNative("MCP_UnhookChatMessage", Native_UnhookChatMessage);
+	CreateNative("MCP_UnhookAllChatMessages", Native_UnhookAllChatMessage);
 	CreateNative("MCP_RegisterSenderFlag", Native_RegisterSenderFlag);
 	CreateNative("MCP_RegisterTargetGroup", Native_RegisterTargetGroup);
 	CreateNative("MCP_UnregisterSenderFlags", Native_UnregisterSenderFlag);
@@ -136,16 +138,18 @@ static void ValidateAfterCall(const char[] stage, int error, Action& returnedAct
 			LogError("MCP_OnChatMessage%s cleard the recipients list instead of cancelling - As PluginDev, Please reconsider", stage);
 		}
 		returnedAction = Plugin_Stop;
-	} else { //remove doubles
-		g_currentMessage.listRecipients.Sort(Sort_Ascending, Sort_Integer);
-		for (int i = g_currentMessage.listRecipients.Length-1; i > 0; i -= 1) {
-			if (g_currentMessage.listRecipients.Get(i) == g_currentMessage.listRecipients.Get(i-1))
-				g_currentMessage.listRecipients.Erase(i);
-		}
 	}
+	//remove doubled recipients
+	g_currentMessage.listRecipients.Sort(Sort_Ascending, Sort_Integer);
+	for (int i = g_currentMessage.listRecipients.Length-1; i > 0; i -= 1) {
+		if (g_currentMessage.listRecipients.Get(i) == g_currentMessage.listRecipients.Get(i-1))
+			g_currentMessage.listRecipients.Erase(i);
+	}
+	//check error code
 	if (error != SP_ERROR_NONE) {
 		ThrowError("MCP_OnChatMessage%s failed with error code %i", stage, error);
 	}
+	//rebuild message format string if required
 	if (returnedAction == Plugin_Changed && rebuildMessageFormat)
 		BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	
@@ -302,6 +306,44 @@ public int Native_HookChatMessage(Handle plugin, int numParams) {
 		case 7: g_fwdOnMessagePost.AddFunction(plugin, fun);
 		default: ThrowNativeError(SP_ERROR_PARAM, "Invalid hook type");
 	}
+}
+public int Native_UnhookChatMessage(Handle plugin, int numParams) {
+	Function fun = GetNativeFunction(1);
+	if (fun == INVALID_FUNCTION) {
+		switch (GetNativeCell(2)) {
+			case 0: g_fwdOnMessagePre.RemoveAllFunctions(plugin);
+			case 1: g_fwdOnMessage_Early.RemoveAllFunctions(plugin);
+			case 2: g_fwdOnMessage_Normal.RemoveAllFunctions(plugin);
+			case 3: g_fwdOnMessage_Late.RemoveAllFunctions(plugin);
+			case 4: g_fwdOnMessageColors.RemoveAllFunctions(plugin);
+			case 5: g_fwdOnMessageGroupName.RemoveAllFunctions(plugin);
+			case 6: g_fwdOnMessageFormatted.RemoveAllFunctions(plugin);
+			case 7: g_fwdOnMessagePost.RemoveAllFunctions(plugin);
+			default: ThrowNativeError(SP_ERROR_PARAM, "Invalid hook type");
+		}
+	} else {
+		switch (GetNativeCell(2)) {
+			case 0: g_fwdOnMessagePre.RemoveFunction(plugin, fun);
+			case 1: g_fwdOnMessage_Early.RemoveFunction(plugin, fun);
+			case 2: g_fwdOnMessage_Normal.RemoveFunction(plugin, fun);
+			case 3: g_fwdOnMessage_Late.RemoveFunction(plugin, fun);
+			case 4: g_fwdOnMessageColors.RemoveFunction(plugin, fun);
+			case 5: g_fwdOnMessageGroupName.RemoveFunction(plugin, fun);
+			case 6: g_fwdOnMessageFormatted.RemoveFunction(plugin, fun);
+			case 7: g_fwdOnMessagePost.RemoveFunction(plugin, fun);
+			default: ThrowNativeError(SP_ERROR_PARAM, "Invalid hook type");
+		}
+	}
+}
+public int Native_UnhookAllChatMessage(Handle plugin, int numParams) {
+	g_fwdOnMessagePre.RemoveAllFunctions(plugin);
+	g_fwdOnMessage_Early.RemoveAllFunctions(plugin);
+	g_fwdOnMessage_Normal.RemoveAllFunctions(plugin);
+	g_fwdOnMessage_Late.RemoveAllFunctions(plugin);
+	g_fwdOnMessageColors.RemoveAllFunctions(plugin);
+	g_fwdOnMessageGroupName.RemoveAllFunctions(plugin);
+	g_fwdOnMessageFormatted.RemoveAllFunctions(plugin);
+	g_fwdOnMessagePost.RemoveAllFunctions(plugin);
 }
 
 public int Native_RegisterSenderFlag(Handle plugin, int numParams) {
