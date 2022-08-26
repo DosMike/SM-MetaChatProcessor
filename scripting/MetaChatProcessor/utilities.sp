@@ -7,7 +7,7 @@
 #endif
 
 
-void ParseConfigs() {
+void LoadDataFiles() {
 	GameData gameData = new GameData("metachatprocessor.games");
 	if (gameData == INVALID_HANDLE) SetFailState("Could not load gamedata file");
 	char buffer[64];
@@ -90,13 +90,24 @@ void LoadCompatConfig() {
 			LogError("[MCP] WARNING: Transport method '%s' not supported, using SayText instead", part);
 		}
 	} else LogError("[MCP] WARNING: Transport method not set, using SayText instead", part);
+	//hook method
+	if (kv.GetDataType("HookMode")==KvData_String) {
+		kv.GetString("HookMode", part, sizeof(part), "UserMessage");
+		if (StrEqual(part, "Command", false)) {
+			g_hookMethod = mcpHook_CommandListener;
+		} else if (StrEqual(part, "UserMessage", false)) {
+			g_hookMethod = mcpHook_UserMessage;
+		} else {
+			LogError("[MCP] WARNING: HookMode method '%s' not supported, using UserMessage instead", part);
+		}
+	} else LogError("[MCP] WARNING: HookMode method not set, using UserMessage instead", part);
 	delete kv;
 }
 
 static void GenerateDefaultConfig(KeyValues kv, const char[] path) {
 	kv.ImportFromString("config { "...
 		"Compatibility { \"SCP Redux\" 1 Drixevel 1 Cider 1 \"Custom-ChatColors\" 0 HexTags 0 \"Fix Post Calls\" 0 } "...
-		"Transport SayText "...
+		"Transport SayText HookMode UserMessage "...
 		"\"Input Sanitizer\" { \"Trim All Whitespaces\" 1 \"Ban On NewLine\" 1 \"Strip Native Colorcodes\" 1 } "...
 		"}");
 	kv.ExportToFile(path);

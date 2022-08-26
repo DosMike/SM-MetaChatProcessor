@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w26c"
+#define PLUGIN_VERSION "22w34a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -63,6 +63,11 @@ enum mcpTransportMethod (+=1) {
 	mcpTransport_PrintToChat, //on drixevels discussion thread unf404 seemd to like this more, will probably break chat filters tho
 }
 mcpTransportMethod g_messageTransport = mcpTransport_SayText; //how to send message
+enum mcpMessageHookMethod (+=1) {
+	mcpHook_UserMessage,
+	mcpHook_CommandListener
+}
+mcpMessageHookMethod g_hookMethod = mcpHook_UserMessage; //how to hook messages
 bool g_fixCompatPostCalls = true; //always call OnChatMessagePost for scp?
 enum mcpInputSanity (<<=1) {
 	mcpInputUnchecked   = 0,
@@ -161,20 +166,36 @@ public void OnPluginStart() {
 	g_bUseProtobuf = (CanTestFeatures() && GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf);
 	g_processedMessages = new ArrayList(sizeof(MessageData));
 	
-	ParseConfigs();
+	LoadDataFiles();
 	pluginAPI_init();
 	
-	UserMsg userMessage;
-	if ((userMessage = GetUserMessageId("SayText2")) != INVALID_MESSAGE_ID) {
-		if (g_bUseProtobuf)
-			HookUserMessage(userMessage, OnUserMessage_SayText2Proto, true);
-		else
-			HookUserMessage(userMessage, OnUserMessage_SayText2BB, true);
-	//} else if ((userMessage = GetUserMessageId("SayText")) != INVALID_MESSAGE_ID) {
-		//SCP only supported dods? maybe add that if people ask for it
-	} else {
-		LogError("Could not hook chat messages for this game - UserMessage SayText2 invalid");
-		SetFailState("This game is currently not supported");
+	switch (g_hookMethod) {
+		case mcpHook_UserMessage: {
+			UserMsg userMessage;
+			if ((userMessage = GetUserMessageId("SayText2")) != INVALID_MESSAGE_ID) {
+				if (g_bUseProtobuf)
+					HookUserMessage(userMessage, OnUserMessage_SayText2Proto, true);
+				else
+					HookUserMessage(userMessage, OnUserMessage_SayText2BB, true);
+			//} else if ((userMessage = GetUserMessageId("SayText")) != INVALID_MESSAGE_ID) {
+				//SCP only supported dods? maybe add that if people ask for it
+			} else {
+				LogError("Could not hook chat messages for this game - UserMessage SayText2 invalid");
+				SetFailState("This game is currently not supported, you might try switching hook mode");
+			}
+		}
+		case mcpHook_CommandListener: {
+			if (!CommandExists("say") || !CommandExists("say_team")) {
+				LogError("Could not hook chat messages for this game - Commands do not exist");
+				SetFailState("This game is currently not supported, you might try switching hook mode");
+			} else if (!AddCommandListener(OnCommand_SayCommand, "say") || !AddCommandListener(OnCommand_SayCommand, "say_team")) {
+				LogError("Could not hook chat messages for this game - Command hooks not available");
+				SetFailState("This game is currently not supported, you might try switching hook mode");
+			}
+		}
+		default: {
+			SetFailState("Invalid value for g_hookMethod");
+		}
 	}
 	
 	ConVar version = CreateConVar("mcp_version", PLUGIN_VERSION, "MetaChatProcessor Version", FCVAR_DONTRECORD|FCVAR_NOTIFY);
@@ -257,6 +278,52 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
 	return ProcessSayText2();
+}
+
+public Action OnCommand_SayCommand(int client, const char[] command, int argc) {
+	if (!client || !IsClientInGame(client)) return Plugin_Continue;
+	bool teamSay = StrEqual(command, "say_team");
+	int team = GetClientTeam(client);
+	
+	// collect basic message options
+	g_currentMessage.Reset();
+	g_currentMessage.sender = client;
+	g_currentMessage.options = mcpMsgDefault;
+	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
+	
+	// generate sender flags
+	if (team == 1) g_currentMessage.senderflags = mcpSenderSpectator;
+	else if (!IsPlayerAlive(client)) g_currentMessage.senderflags = mcpSenderDead;
+	else g_currentMessage.senderflags = mcpSenderNone;
+	// generate target group
+	if (team == 1) g_currentMessage.group = mcpTargetSpecator;
+	else if (team && teamSay) {
+		if (g_msgNameTagCount) g_currentMessage.group = view_as<mcpTargetGroup>(team);
+		else g_currentMessage.group = mcpTargetTeamSender;
+	}
+	else g_currentMessage.group = mcpTargetNone;
+	
+	// build message format string mock
+	BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
+	// fetch name and message
+	GetClientName(client, g_currentMessage.sender_name, sizeof(MessageData::sender_name));
+	GetCmdArgString(g_currentMessage.message, 128); //this uses the max length of the chat box, no cheating with console
+	
+	// replace all control characters with a question mark. not possible through steam, but hacker can do
+	int len = strlen(g_currentMessage.sender_name);
+	for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
+	// copy as initial display name
+	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
+	
+	// collect recipients
+	g_currentMessage.listRecipients.Clear();
+	for (int target=1; target<=MaxClients; target++) {
+		if (!IsClientInGame(target) || IsFakeClient(target)) continue;
+		if (teamSay && GetClientTeam(target) != team) continue;
+		g_currentMessage.listRecipients.Push(target);
+	}
+	
+	return ProcessSayText2(); //can be reused for command hook
 }
 
 Action ProcessSayText2() {

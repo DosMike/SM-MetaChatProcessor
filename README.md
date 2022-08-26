@@ -54,11 +54,19 @@ The config can be found at `addons/sourcemod/config/metachatprocessor.cfg`:
 		"HexTags"		"1"
 		"Fix Post Calls"	"0"
 	}
+	// Transport defines the message channel/type. You should probably keep it at SayText.
+	// Possible values: [ PrintToChat , SayText ]
 	"Transport"		"SayText"
+	// HookMode defines how messages are cought. Command listener is experimental and might not block the original message correctly in all cases.
+	// Possible values: [ Command , UserMessage ]
+	"HookMode"		"UserMessage"
 	"Input Sanitizer"
 	{
+		// Trim messages of "space" codepoints (utf8 support) ?
 		"Trim All Whitespaces"		1
+		// get rid of hackers
 		"Ban On NewLine"			1
+		// clients are not allowed to use \x01..\x08 colors
 		"Strip Native Colorcodes"	1
 	} 
 }
