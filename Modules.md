@@ -3,7 +3,7 @@
 This variation of the AM plugin uses MCP to proxy it's various chat commands.
 This allows admin snooping, as well as player the player prefix to be applied to /say /psay and /chat.
 
-#mcp-sayredirects
+# mcp-sayredirects
 
 Replacement for Cider ChatProcessors AllChat and DeadChat with some bonus features.
 
