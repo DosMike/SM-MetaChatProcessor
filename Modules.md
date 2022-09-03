@@ -18,3 +18,5 @@ Replacement for Cider ChatProcessors AllChat and DeadChat with some bonus featur
 `sm_sayredirect_snoopflag` - Add staff members with the specified admin bit as recipients to MCP chat messages (Default z, empty to disable)
 
 `sm_sayredirect_colorteamtag` - Set the (TEAM)-say prefix to use team color (1/0)
+
+`sm_sayredirect_forceteamname` - Force say_team messages to use the team name instead of the generic (TEAM) prefix (1/0)

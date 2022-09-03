@@ -78,6 +78,7 @@ void LoadCompatConfig() {
 		if (kv.GetNum("Trim All Whitespaces")>0) g_sanitizeInput |= mcpInputTrimMBSpace;
 		if (kv.GetNum("Ban On NewLine")>0) g_sanitizeInput |= mcpInputBanNewline;
 		if (kv.GetNum("Strip Native Colorcodes")>0) g_sanitizeInput |= mcpInputStripColors;
+		kv.GoBack();
 	} else LogError("[MCP] 'Input Sanitizer' section missing from config");
 	//transport method
 	if (kv.GetDataType("Transport")==KvData_String) {

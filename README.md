@@ -42,7 +42,7 @@ Lastly there's the option `Ban On NewLine`, this option will automatically perma
 There is no way (that I know of) for a player to input new line characters into a chat message, and this seems to be only used by hack clients to disrupt chat flow (With the latest TF2 patch this should not longer be possible in that game anyways).
 
 The config can be found at `addons/sourcemod/config/metachatprocessor.cfg`:
-```json
+```c
 "config"
 {
 	"Compatibility"

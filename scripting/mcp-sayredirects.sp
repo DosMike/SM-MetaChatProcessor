@@ -21,6 +21,7 @@ bool g_SnoopingEnabled;
 int g_AllChatMode;
 bool g_DeadChat;
 bool g_TeamTagColor;
+bool g_ForceTeamName;
 
 static void HookAndLoadConVar(ConVar convar, ConVarChanged hook) {
 	//I sometimes hate convars...
@@ -41,15 +42,18 @@ public void OnPluginStart() {
 	ConVar cvar2 = CreateConVar("sm_sayredirect_allchat", "0", "Redirect team chat as follows: 0-Don't change; 1-Always to all; 2-Team 2 chat to all; 3-Team 3 chat to all", _, true, 0.0, true, 3.0);
 	ConVar cvar3 = CreateConVar("sm_sayredirect_deadchat", "0", "Send messages from dead players to alive players", _, true, 0.0, true, 1.0);
 	ConVar cvar4 = CreateConVar("sm_sayredirect_colorteamtag", "0", "Color the (TEAM) tag for say_team in team color", _, true, 0.0, true, 1.0);
+	ConVar cvar5 = CreateConVar("sm_sayredirect_forceteamname", "0", "Force team say to use the team name instead of (TEAM)", _, true, 0.0, true, 1.0);
 	AutoExecConfig(); //gen/load config
 	HookAndLoadConVar(cvar1,OnConVarChanged_SnoopFlag);
 	HookAndLoadConVar(cvar2,OnConVarChanged_AllChat);
 	HookAndLoadConVar(cvar3,OnConVarChanged_DeadChat);
 	HookAndLoadConVar(cvar4,OnConVarChanged_TeamTagColor);
+	HookAndLoadConVar(cvar5,OnConVarChanged_ForceTeamName);
 	delete cvar1;
 	delete cvar2;
 	delete cvar3;
 	delete cvar4;
+	delete cvar5;
 }
 
 public void OnAllPluginsLoaded() {
@@ -69,11 +73,19 @@ public void OnConVarChanged_DeadChat(ConVar convar, const char[] oldValue, const
 public void OnConVarChanged_TeamTagColor(ConVar convar, const char[] oldValue, const char[] newValue) {
 	g_TeamTagColor = convar.BoolValue;
 }
+public void OnConVarChanged_ForceTeamName(ConVar convar, const char[] oldValue, const char[] newValue) {
+	g_ForceTeamName = convar.BoolValue;
+}
 
 public Action OnMessage_Redirect(int& sender, ArrayList recipients, mcpSenderFlag& senderflags, mcpTargetGroup& targetgroup, mcpMessageOption& options, char[] targetgroupColor) {
 	bool isTeamSay = mcpTargetTeam1 <= targetgroup <= mcpTargetTeamSender;
 	bool isDeadChat = (senderflags & mcpSenderDead)!=mcpSenderNone;
 	int fromTeam = sender ? GetClientTeam(sender) : 0;
+	
+	//use team names instead of generic (TEAM) tag for say_team
+	if (targetgroup == mcpTargetTeamSender && g_ForceTeamName && fromTeam) {
+		targetgroup = view_as<mcpTargetGroup>(fromTeam);
+	}
 	
 	//true if this message stays withing the senders team
 	bool checkTeam = isTeamSay;

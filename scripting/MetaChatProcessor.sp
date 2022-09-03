@@ -307,7 +307,12 @@ public Action OnCommand_SayCommand(int client, const char[] command, int argc) {
 	BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	// fetch name and message
 	GetClientName(client, g_currentMessage.sender_name, sizeof(MessageData::sender_name));
-	GetCmdArgString(g_currentMessage.message, 128); //this uses the max length of the chat box, no cheating with console
+	GetCmdArgString(g_currentMessage.message, sizeof(MessageData::message));
+	if (argc==1 && g_currentMessage.message[0]=='"') {
+		//higly probable that this message is sent from chat. argc==1 makes this check more robust than base game xD
+		StripQuotes(g_currentMessage.message);
+	}
+	g_currentMessage.message[128]=0; //this uses the max length of the chat box, no cheating
 	
 	// replace all control characters with a question mark. not possible through steam, but hacker can do
 	int len = strlen(g_currentMessage.sender_name);
