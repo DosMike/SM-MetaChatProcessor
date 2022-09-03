@@ -451,7 +451,6 @@ public int Handler_DoNothing(Menu menu, MenuAction action, int param1, int param
 public Action mcp_DirectMessageGroupName(int sender, int recipient, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, const char[] groupphrase, char[] groupname) {
 	int dmTarget;
 	if (targetgroup == mcpTargetDirect && (dmTarget = MCP_GetMessageData())!=0) {
-		PrintToServer("Formatting %s with %N for %N", groupphrase, dmTarget, recipient);
 		Format(groupname, MCP_MAXLENGTH_TRANPHRASE, "%T", groupphrase, recipient, dmTarget);
 		return Plugin_Changed;
 	}
