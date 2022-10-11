@@ -142,8 +142,9 @@ static void ValidateAfterCall(const char[] stage, int error, Action& returnedAct
 	//remove doubled recipients
 	g_currentMessage.listRecipients.Sort(Sort_Ascending, Sort_Integer);
 	for (int i = g_currentMessage.listRecipients.Length-1; i > 0; i -= 1) {
-		if (g_currentMessage.listRecipients.Get(i) == g_currentMessage.listRecipients.Get(i-1))
+		if (g_currentMessage.listRecipients.Get(i) == g_currentMessage.listRecipients.Get(i-1)) {
 			g_currentMessage.listRecipients.Erase(i);
+		}
 	}
 	//check error code
 	if (error != SP_ERROR_NONE) {

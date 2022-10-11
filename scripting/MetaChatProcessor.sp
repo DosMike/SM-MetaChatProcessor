@@ -250,7 +250,10 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	}
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-	return ProcessSayText2();
+	
+	CollectMessage();
+	return Plugin_Handled;
+//	return ProcessSayText2();
 }
 public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	// collect the message
@@ -277,7 +280,10 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	}
 	
 	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-	return ProcessSayText2();
+	
+	CollectMessage();
+	return Plugin_Handled;
+//	return ProcessSayText2();
 }
 
 public Action OnCommand_SayCommand(int client, const char[] command, int argc) {
@@ -328,7 +334,34 @@ public Action OnCommand_SayCommand(int client, const char[] command, int argc) {
 		g_currentMessage.listRecipients.Push(target);
 	}
 	
-	return ProcessSayText2(); //can be reused for command hook
+	CollectMessage();
+	return Plugin_Handled;
+//	return ProcessSayText2(); //can be reused for command hook
+}
+
+Action CollectMessage() {
+	//messages can be sent spliterated, collect all messages with the same sender in one tick
+	int splindex = g_processedMessages.FindValue(g_currentMessage.sender, MessageData::sender);
+	if (splindex >= 0) {
+		// append the recipient(s) to the existing message
+		ArrayList recipients = view_as<ArrayList>(g_processedMessages.Get(splindex, MessageData::listRecipients));
+		for (int rec=g_currentMessage.listRecipients.Length-1;rec>=0;rec--) {
+			int recipient = g_currentMessage.listRecipients.Get(rec);
+			if (IsClientConnected(recipient))
+				recipients.Push( GetClientUserId( recipient ) );
+		}
+	} else {
+		g_currentMessage.valid = true;
+		//send of to next frame as we can't create another user message within this hook
+		for (int rec=g_currentMessage.listRecipients.Length-1;rec>=0;rec--) {
+			//map client ids to user-ids since we are about to cross tick boundary
+			int recipient = g_currentMessage.listRecipients.Get(rec);
+			if (!IsClientConnected(recipient)) g_currentMessage.listRecipients.Erase(rec);
+			else g_currentMessage.listRecipients.Set(rec, GetClientUserId( recipient ));
+		}
+		g_processedMessages.PushArray(g_currentMessage); //push with .valid = true
+		g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle, sets .valid false
+	}
 }
 
 Action ProcessSayText2() {
@@ -388,15 +421,6 @@ Action ProcessSayText2() {
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
 	result = g_currentMessage.changed ? Plugin_Handled : Plugin_Continue;
-	//send of to next frame as we can't create another user message within this hook
-	for (int rec=g_currentMessage.listRecipients.Length-1;rec>=0;rec--) {
-		//map client ids to user-ids since we are about to cross tick boundary
-		int recipient = g_currentMessage.listRecipients.Get(rec);
-		if (!recipient) continue;
-		g_currentMessage.listRecipients.Set(rec, GetClientUserId( recipient ));
-	}
-	g_processedMessages.PushArray(g_currentMessage); //push with .valid = true
-	g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle, sets .valid false
 	
 #undef THEN_CANCEL
 	return result;
@@ -421,11 +445,13 @@ public void OnGameFrame() {
 		// process message
 		//if this failes we hopefully threw an error and will continue processing
 		//other messages in the next game tick, as this one was already dequeued
-		if (g_currentMessage.valid) {
-			if (g_currentMessage.changed) ResendChatMessage();
-			Call_OnChatMessagePost();
-		} else {
-			LogError("Pushed or didnt clear invalid message! %N :  %s", g_currentMessage.sender, g_currentMessage.message);
+		if (ProcessSayText2() <= Plugin_Handled) {
+			if (g_currentMessage.valid) {
+				ResendChatMessage();
+				Call_OnChatMessagePost();
+			} else {
+				LogError("Pushed or didnt clear invalid message! %N :  %s", g_currentMessage.sender, g_currentMessage.message);
+			}
 		}
 	}
 	//we still have an old recipients list here that wasn't deleted. this instance
