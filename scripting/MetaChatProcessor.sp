@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w34a"
+#define PLUGIN_VERSION "22w41a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -101,6 +101,33 @@ enum struct MessageData {
 	
 	ArrayList listRecipients; //other plugins can't close our handle, so we are fine using this
 	ArrayList userMessageData; //data bag for other plugins to attach data to the message during processing
+	
+	void ClientsToUserIds() {
+		if (this.sender!=0)
+			this.sender = GetClientUserId(this.sender);
+		for (int recipientNo=this.listRecipients.Length-1; recipientNo>=0; recipientNo-=1) {
+			int recipientAt = this.listRecipients.Get(recipientNo);
+			if (recipientAt==0) continue; //don't touch server recipient, that's always 0
+			if (1<=recipientAt<=MaxClients && IsClientConnected(recipientAt))
+				this.listRecipients.Set(recipientNo, GetClientUserId(recipientAt));
+			else
+				this.listRecipients.Erase(recipientNo);
+		}
+	}
+	void UserIdsToClients() {
+		if (this.sender!=0) {
+			this.sender = GetClientOfUserId(this.sender);
+			if (this.sender==0) this.valid = false;
+		}
+		for (int recipientNo=this.listRecipients.Length-1; recipientNo>=0; recipientNo-=1) {
+			int recipientAt = this.listRecipients.Get(recipientNo);
+			if (recipientAt==0) continue; //don't touch server recipient, that's always 0
+			if ((recipientAt = GetClientOfUserId(recipientAt)) != 0)
+				this.listRecipients.Set(recipientNo, recipientAt);
+			else
+				this.listRecipients.Erase(recipientNo);
+		}
+	}
 	
 	void Reset(bool newRecipientsInstace=false) {
 		this.valid = false;
@@ -188,9 +215,6 @@ public void OnPluginStart() {
 			if (!CommandExists("say") || !CommandExists("say_team")) {
 				LogError("Could not hook chat messages for this game - Commands do not exist");
 				SetFailState("This game is currently not supported, you might try switching hook mode");
-			} else if (!AddCommandListener(OnCommand_SayCommand, "say") || !AddCommandListener(OnCommand_SayCommand, "say_team")) {
-				LogError("Could not hook chat messages for this game - Command hooks not available");
-				SetFailState("This game is currently not supported, you might try switching hook mode");
 			}
 		}
 		default: {
@@ -223,13 +247,13 @@ public void OnClientDisconnect(int client) {
 		mcp_drixevel_client_disconnect(client);
 }
 
-
 public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	// collect the message
 	Protobuf buf = UserMessageToProtobuf(msg);
 	g_currentMessage.Reset();
 	g_currentMessage.sender = buf.ReadInt("ent_idx");
 	if (!g_currentMessage.sender) return Plugin_Continue;
+	if (IsClientInKickQueue(g_currentMessage.sender)) return Plugin_Stop;
 	g_currentMessage.options = buf.ReadBool("chat") ? mcpMsgDefault : mcpMsgNoConsoleCopy;
 	//by default the game does not allow colors, we let config decide
 	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
@@ -238,28 +262,41 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	buf.ReadString("params", g_currentMessage.sender_name, sizeof(MessageData::sender_name), 0);
 	buf.ReadString("params", g_currentMessage.message, sizeof(MessageData::message), 1);
 	
-	// replace all control characters with a question mark. not possible through steam, but hacker can do
-	int len = strlen(g_currentMessage.sender_name);
-	for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
-	// copy as initial display name
-	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
-	
-	g_currentMessage.listRecipients.Clear();
-	for (int reci=0;reci<playersNum;reci++) {
-		g_currentMessage.listRecipients.Push(players[reci]);
+	// check if this is a spliterated message
+	int spliterated = FindExistingMessage();
+	if (spliterated >= 0) {
+		// all we need to do is append the recipients list, the rest is equal
+		ArrayList recipients = g_processedMessages.Get(spliterated, MessageData::listRecipients);
+		for (int recipientIndex = 0; recipientIndex < playersNum; recipientIndex+=1) {
+			recipients.Push( GetClientUserId( players[recipientIndex] ) );
+		}
+	} else {
+		//this is a new message, do some additional processing
+		
+		// replace all control characters with a question mark. not possible through steam, but hacker can do
+		int len = strlen(g_currentMessage.sender_name);
+		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
+		// copy as initial display name
+		strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
+		
+		g_currentMessage.listRecipients.Clear();
+		for (int recipientIndex = 0; recipientIndex < playersNum; recipientIndex+=1) {
+			g_currentMessage.listRecipients.Push( players[recipientIndex] );
+		}
+		
+		ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
+		
+		QueueMessage();
 	}
-	
-	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-	
-	CollectMessage();
 	return Plugin_Handled;
-//	return ProcessSayText2();
 }
+
 public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	// collect the message
 	g_currentMessage.Reset();
 	g_currentMessage.sender = msg.ReadByte();
 	if (!g_currentMessage.sender) return Plugin_Continue;
+	if (IsClientInKickQueue(g_currentMessage.sender)) return Plugin_Stop;
 	g_currentMessage.options = msg.ReadByte() ? mcpMsgDefault : mcpMsgNoConsoleCopy;
 	//by default the game does not allow colors, we let config decide
 	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
@@ -268,28 +305,42 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.sender_name, sizeof(MessageData::sender_name));
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.message, sizeof(MessageData::message));
 	
-	// replace all control characters with a question mark. not possible through steam, but hacker can do
-	int len = strlen(g_currentMessage.sender_name);
-	for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
-	// copy as initial display name
-	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
+	// check if this is a spliterated message
+	int spliterated = FindExistingMessage();
+	if (spliterated >= 0) {
+		// all we need to do is append the recipients list, the rest is equal
+		ArrayList recipients = g_processedMessages.Get(spliterated, MessageData::listRecipients);
+		for (int recipientIndex = 0; recipientIndex < playersNum; recipientIndex+=1) {
+			recipients.Push( GetClientUserId( players[recipientIndex] ) );
+		}
+	} else {
+		//this is a new message, do some additional processing
 	
-	g_currentMessage.listRecipients.Clear();
-	for (int reci=0;reci<playersNum;reci++) {
-		g_currentMessage.listRecipients.Push(players[reci]);
+		// replace all control characters with a question mark. not possible through steam, but hacker can do
+		int len = strlen(g_currentMessage.sender_name);
+		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
+		// copy as initial display name
+		strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
+		
+		g_currentMessage.listRecipients.Clear();
+		for (int recipientIndex = 0; recipientIndex < playersNum; recipientIndex++) {
+			g_currentMessage.listRecipients.Push( players[recipientIndex] );
+		}
+		
+		ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
+		
+		QueueMessage();
 	}
-	
-	ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-	
-	CollectMessage();
 	return Plugin_Handled;
-//	return ProcessSayText2();
 }
 
-public Action OnCommand_SayCommand(int client, const char[] command, int argc) {
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs) {
+	if (g_hookMethod != mcpHook_CommandListener) return Plugin_Continue;
 	if (!client || !IsClientInGame(client)) return Plugin_Continue;
-	bool teamSay = StrEqual(command, "say_team");
+	bool teamSay;
 	int team = GetClientTeam(client);
+	if (StrEqual(command, "say_team")) teamSay = true;
+	else if (!StrEqual(command,"say")) return Plugin_Continue; //dont process say_party, if that's even received
 	
 	// collect basic message options
 	g_currentMessage.Reset();
@@ -313,9 +364,9 @@ public Action OnCommand_SayCommand(int client, const char[] command, int argc) {
 	BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	// fetch name and message
 	GetClientName(client, g_currentMessage.sender_name, sizeof(MessageData::sender_name));
-	GetCmdArgString(g_currentMessage.message, sizeof(MessageData::message));
-	if (argc==1 && g_currentMessage.message[0]=='"') {
-		//higly probable that this message is sent from chat. argc==1 makes this check more robust than base game xD
+	strcopy(g_currentMessage.message, sizeof(MessageData::message), sArgs);
+	if (GetCmdArgs() == 1 && g_currentMessage.message[0]=='"') {
+		//higly probable that this message is sent from chat. GetCmdArgs()==1 makes this check more robust than base game xD
 		StripQuotes(g_currentMessage.message);
 	}
 	g_currentMessage.message[128]=0; //this uses the max length of the chat box, no cheating
@@ -334,41 +385,50 @@ public Action OnCommand_SayCommand(int client, const char[] command, int argc) {
 		g_currentMessage.listRecipients.Push(target);
 	}
 	
-	CollectMessage();
+	QueueMessage();
 	return Plugin_Handled;
-//	return ProcessSayText2(); //can be reused for command hook
 }
 
-Action CollectMessage() {
-	//messages can be sent spliterated, collect all messages with the same sender in one tick
-	int splindex = g_processedMessages.FindValue(g_currentMessage.sender, MessageData::sender);
-	if (splindex >= 0) {
-		// append the recipient(s) to the existing message
-		ArrayList recipients = view_as<ArrayList>(g_processedMessages.Get(splindex, MessageData::listRecipients));
-		for (int rec=g_currentMessage.listRecipients.Length-1;rec>=0;rec--) {
-			int recipient = g_currentMessage.listRecipients.Get(rec);
-			if (IsClientConnected(recipient))
-				recipients.Push( GetClientUserId( recipient ) );
+public void OnGameFrame() {
+	while (g_processedMessages.Length > 0) {
+		// pop message
+		//delete the previous handle, we will fetch an old one from the list
+		delete g_currentMessage.listRecipients;
+		g_processedMessages.GetArray(0, g_currentMessage);
+		g_processedMessages.Erase(0);
+		//re-map recipients from uids to clients
+		g_currentMessage.UserIdsToClients();
+		if (!g_currentMessage.valid) continue; //sender left
+		
+		// process message
+		//if this failes we hopefully threw an error and will continue processing
+		//other messages in the next game tick, as this one was already dequeued
+		if (ProcessMessage()) {
+			ResendChatMessage();
+			Call_OnChatMessagePost();
+		} else {
+			LogError("Pushed or didnt clear invalid message! %N :  %s", g_currentMessage.sender, g_currentMessage.message);
 		}
-	} else {
-		g_currentMessage.valid = true;
-		//send of to next frame as we can't create another user message within this hook
-		for (int rec=g_currentMessage.listRecipients.Length-1;rec>=0;rec--) {
-			//map client ids to user-ids since we are about to cross tick boundary
-			int recipient = g_currentMessage.listRecipients.Get(rec);
-			if (!IsClientConnected(recipient)) g_currentMessage.listRecipients.Erase(rec);
-			else g_currentMessage.listRecipients.Set(rec, GetClientUserId( recipient ));
-		}
-		g_processedMessages.PushArray(g_currentMessage); //push with .valid = true
-		g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle, sets .valid false
 	}
+	//we still have an old recipients list here that wasn't deleted. this instance
+	//will be cleared and reused by the next SayText2 hook
+	//until then, the message structure is invalid tho
+	g_currentMessage.valid = false;
 }
 
-Action ProcessSayText2() {
-	Action result;
-	g_currentMessage.valid = true;
-#define THEN_CANCEL { g_currentMessage.valid = false; return Plugin_Handled; }
-	
+int FindExistingMessage() {
+	//expects current message to be in client mode, queued messages are in userid mode
+	int sendUser = GetClientUserId(g_currentMessage.sender);
+	for (int msgNo = g_processedMessages.Length-1; msgNo >= 0; msgNo -= 1) {
+		if (g_processedMessages.Get(msgNo, MessageData::sender) != sendUser) continue;
+		MessageData data;
+		g_processedMessages.GetArray(msgNo, data);
+		if (StrEqual(data.message, g_currentMessage.message)) return msgNo;
+	}
+	return -1;
+}
+
+void QueueMessage() {
 	//this is some basic chat sanitizing. should we do this as chat processor?
 	// i think most server operators wont event know this can be an issue, and
 	// as they wouldn't look for it otherwise i'll do it.
@@ -377,24 +437,39 @@ Action ProcessSayText2() {
 	//   THIS CAN BAN CLIENTS IF A FAKE MESSAGE WITH NEWLINES IS SENT!
 	//   The API call is temporarily removing this flag to prevent false bans
 	// - Copy back the multibyte whitespace trimmed message if configured
-	{
-		bool hasNewLines=false;
-		char tmp[MCP_MAXLENGTH_INPUT];
-		strcopy(tmp, sizeof(tmp), g_currentMessage.message);
-		for (int c=strlen(tmp)-1; c>=0; c--) {
-			if (tmp[c] == '\n' || tmp[c] == '\r') {
-				tmp[c] = ' '; //defo replace these as they get used to break chat by hacks
-				hasNewLines = true;
-			}
+	bool hasNewLines=false;
+	char tmp[MCP_MAXLENGTH_INPUT];
+	strcopy(tmp, sizeof(tmp), g_currentMessage.message);
+	for (int c=strlen(tmp)-1; c>=0; c--) {
+		if (tmp[c] == '\n' || tmp[c] == '\r') {
+			tmp[c] = ' '; //defo replace these as they get used to break chat by hacks
+			hasNewLines = true;
 		}
-		if (hasNewLines && (g_sanitizeInput & mcpInputBanNewline)) {
-			BanClient(g_currentMessage.sender, 0, BANFLAG_AUTHID|BANFLAG_AUTO, "Hacked Client: Invalid characters in chat input (line breaks)", "Hacked client detected", "say", g_currentMessage.sender);
-			return Plugin_Handled;
-		}
-		TrimStringMB(tmp);
-		if (tmp[0]==0) THEN_CANCEL //message is empty or a "break chat" message
-		if (g_sanitizeInput & mcpInputTrimMBSpace) strcopy(g_currentMessage.message, sizeof(MessageData::message), tmp);
 	}
+	if (hasNewLines && (g_sanitizeInput & mcpInputBanNewline)) {
+		if (!IsClientInKickQueue(g_currentMessage.sender)) {
+			if (!BanClient(g_currentMessage.sender, 0, BANFLAG_AUTHID|BANFLAG_AUTO, "Hacked Client: Invalid characters in chat input (line breaks)", "Hacked client detected", "say", g_currentMessage.sender))
+				KickClient(g_currentMessage.sender, "Hacked client detected");
+		}
+		g_currentMessage.Reset();
+		return;
+	}
+	TrimStringMB(tmp);
+	if (tmp[0]==0) { //message is empty or a "break chat" message
+		g_currentMessage.Reset();
+		return;
+	}
+	if (g_sanitizeInput & mcpInputTrimMBSpace) strcopy(g_currentMessage.message, sizeof(MessageData::message), tmp);
+	
+	g_currentMessage.valid = true;
+	g_currentMessage.ClientsToUserIds();
+	g_processedMessages.PushArray(g_currentMessage); //push with .valid = true
+	g_currentMessage.Reset(.newRecipientsInstace = true); //because we pushed the list handle, sets .valid false
+}
+
+bool ProcessMessage() {
+#define THEN_CANCEL { g_currentMessage.valid = false; return false; }
+	Action result;
 	
 	//mcpHookPre
 	result = Call_OnChatMessagePre();
@@ -420,44 +495,8 @@ Action ProcessSayText2() {
 	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
-	result = g_currentMessage.changed ? Plugin_Handled : Plugin_Continue;
-	
+	return true;
 #undef THEN_CANCEL
-	return result;
-}
-//continuation
-public void OnGameFrame() {
-	while (g_processedMessages.Length > 0) {
-		// pop message
-		//delete the previous handle, we will fetch an old one from the list
-		delete g_currentMessage.listRecipients;
-		g_processedMessages.GetArray(0, g_currentMessage);
-		g_processedMessages.Erase(0);
-		//re-map recipients from uids to clients
-		for (int i=g_currentMessage.listRecipients.Length-1; i>=0; i-=1) {
-			int recipient = g_currentMessage.listRecipients.Get(i);
-			if (!recipient) continue; //don't touch server recipient, that's always 0
-			recipient = GetClientOfUserId(recipient); // validate
-			if (recipient) g_currentMessage.listRecipients.Set(i, recipient);
-			else g_currentMessage.listRecipients.Erase(i);
-		}
-		
-		// process message
-		//if this failes we hopefully threw an error and will continue processing
-		//other messages in the next game tick, as this one was already dequeued
-		if (ProcessSayText2() <= Plugin_Handled) {
-			if (g_currentMessage.valid) {
-				ResendChatMessage();
-				Call_OnChatMessagePost();
-			} else {
-				LogError("Pushed or didnt clear invalid message! %N :  %s", g_currentMessage.sender, g_currentMessage.message);
-			}
-		}
-	}
-	//we still have an old recipients list here that wasn't deleted. this instance
-	//will be cleared and reused by the next SayText2 hook
-	//until then, the message structure is invalid tho
-	g_currentMessage.valid = false;
 }
 
 static void ResendChatMessage() {

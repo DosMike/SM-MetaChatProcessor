@@ -429,7 +429,7 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	//temporarily allow newlines, this is a hack and should probably be done cleaner
 	bool wouldBan = (g_sanitizeInput & mcpInputBanNewline) == mcpInputBanNewline;
 	g_sanitizeInput &=~ mcpInputBanNewline;
-	ProcessSayText2();
+	QueueMessage();
 	if (wouldBan) g_sanitizeInput |= mcpInputBanNewline;
 }
 
