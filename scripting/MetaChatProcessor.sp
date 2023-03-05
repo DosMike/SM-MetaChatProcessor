@@ -294,6 +294,7 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 
 public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	// collect the message
+	int tmp=(g_currentMessage.listRecipients == null ? 0 : g_currentMessage.listRecipients.Length);
 	g_currentMessage.Reset();
 	g_currentMessage.sender = msg.ReadByte();
 	if (!g_currentMessage.sender) return Plugin_Continue;
@@ -407,7 +408,7 @@ public void OnGameFrame() {
 		if (ProcessMessage()) {
 			ResendChatMessage();
 			Call_OnChatMessagePost();
-		} else {
+		} else if (g_currentMessage.message[0]!=0) { //process returned false, and message was not trimmed out? -> error
 			LogError("Pushed or didnt clear invalid message! %N :  %s", g_currentMessage.sender, g_currentMessage.message);
 		}
 	}
@@ -422,9 +423,9 @@ int FindExistingMessage() {
 	int sendUser = GetClientUserId(g_currentMessage.sender);
 	for (int msgNo = g_processedMessages.Length-1; msgNo >= 0; msgNo -= 1) {
 		if (g_processedMessages.Get(msgNo, MessageData::sender) != sendUser) continue;
-		MessageData data;
-		g_processedMessages.GetArray(msgNo, data);
-		if (StrEqual(data.message, g_currentMessage.message)) return msgNo;
+		return msgNo;
+		//a player can't send multiple messages a tick (game limitation), so we dont need to string compare
+		//also we store an already pre-filtered and trimmed string, so comparing becomes inaccurate
 	}
 	return -1;
 }
@@ -495,6 +496,9 @@ bool ProcessMessage() {
 	result = Call_OnChatMessage(1); //can still change colors if wanted i guess
 	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
+	
+	//check if message was cleared, we dont want to send empty messages (clutter)
+	if (g_currentMessage.message[0]==0) THEN_CANCEL
 	
 	return true;
 #undef THEN_CANCEL
