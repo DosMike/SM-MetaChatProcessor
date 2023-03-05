@@ -29,7 +29,7 @@ static Handle drixevel_fwdOnStripClientTagsPost;
 static Handle drixevel_fwdOnSetTagColorPost;
 static Handle drixevel_fwdOnSetNameColorPost;
 static Handle drixevel_fwdOnSetChatColorPost;
-#pragma unused drixevel_fwdOnReloadChatData
+//#pragma unused drixevel_fwdOnReloadChatData
 //called on configs executed if late loaded. we don't have configs, so we stub this
 static Handle drixevel_fwdOnReloadChatData;
 
@@ -146,6 +146,7 @@ public Action MCP_Drixevel_OnChatMessage(int& sender, ArrayList recipients, mcpS
 		//from code review version 2.2.9 seems to have a bug that prevents actually changing the format
 //		ParseMessageFormat(sFlag, senderflags, targetgroup);
 	}
+	return Plugin_Continue;
 }
 
 public Action MCP_Drixevel_OnChatFormatted(int sender, int recipient, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, mcpMessageOption options, char[] formatted) {
@@ -370,6 +371,7 @@ public any Native_Drixevel_GetFlagFormatString(Handle plugin, int numParams) {
 	
 	GetFlagFormatString(input, output, sizeof(output));
 	SetNativeString(2, output, GetNativeCell(3));
+	return 0;
 }
 
 public int Native_Drixevel_AddClientTag(Handle plugin, int numParams)

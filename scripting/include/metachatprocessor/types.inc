@@ -26,10 +26,10 @@
  *
  * Note: These flags are for formatting only, the recipients list is still relevant!
  */
-enum mcpSenderFlag (<<=1) {
+enum mcpSenderFlag {
 	mcpSenderNone      = 0,
-	mcpSenderDead      = 1, /* the sender is currently dead */
-	mcpSenderSpectator = 2, /* the sender is specating */
+	mcpSenderDead      = (1<<0), /* the sender is currently dead */
+	mcpSenderSpectator = (1<<1), /* the sender is specating */
 	/* other values should be treated as custom, not invalid */
 }
 
@@ -55,17 +55,17 @@ enum mcpTargetGroup {
 	/* other values should be treated as custom, not invalid */
 }
 
-enum mcpMessageOption (<<=1) {
+enum mcpMessageOption {
 	mcpMsgDefault         = 0, // white *flag* and (group), allow colors in name and message. Not that default also means the message gets copied to console
-	mcpMsgProcessColors   = 1, //This message should process color templates like {Red} -> intended to give plugins multicolor support
-	mcpMsgRemoveColors    = 2, //This message should remove colos including \x07RRGGBB -> intended to clean input
-	mcpMsgGrouptagColor   = 4, //This message has a custom group tag color set
-	mcpMsgIgnoreNameColor = 8, //The group tag color will replace tag and name color
-	mcpMsgNoConsoleCopy   = 16, //The message will only print to chat, and not to console
+	mcpMsgProcessColors   = (1<<0), //This message should process color templates like {Red} -> intended to give plugins multicolor support
+	mcpMsgRemoveColors    = (1<<1), //This message should remove colos including \x07RRGGBB -> intended to clean input
+	mcpMsgGrouptagColor   = (1<<2), //This message has a custom group tag color set
+	mcpMsgIgnoreNameColor = (1<<3), //The group tag color will replace tag and name color
+	mcpMsgNoConsoleCopy   = (1<<4), //The message will only print to chat, and not to console
 }
 
 /** executed in this order */
-enum mcpHookType (+=1) {
+enum mcpHookType {
 	mcpHookPre       = 0, //message was just parsed, name and message not available
 	mcpHookEarly     = 1, //eraly message hook. ONLY USE IF DEFAULT IS TOO LATE!
 	mcpHookDefault   = 2, //normal message hook

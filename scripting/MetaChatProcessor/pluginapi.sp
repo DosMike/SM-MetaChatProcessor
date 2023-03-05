@@ -307,6 +307,7 @@ public int Native_HookChatMessage(Handle plugin, int numParams) {
 		case 7: g_fwdOnMessagePost.AddFunction(plugin, fun);
 		default: ThrowNativeError(SP_ERROR_PARAM, "Invalid hook type");
 	}
+	return 0;
 }
 public int Native_UnhookChatMessage(Handle plugin, int numParams) {
 	Function fun = GetNativeFunction(1);
@@ -335,6 +336,7 @@ public int Native_UnhookChatMessage(Handle plugin, int numParams) {
 			default: ThrowNativeError(SP_ERROR_PARAM, "Invalid hook type");
 		}
 	}
+	return 0;
 }
 public int Native_UnhookAllChatMessage(Handle plugin, int numParams) {
 	g_fwdOnMessagePre.RemoveAllFunctions(plugin);
@@ -345,6 +347,7 @@ public int Native_UnhookAllChatMessage(Handle plugin, int numParams) {
 	g_fwdOnMessageGroupName.RemoveAllFunctions(plugin);
 	g_fwdOnMessageFormatted.RemoveAllFunctions(plugin);
 	g_fwdOnMessagePost.RemoveAllFunctions(plugin);
+	return 0;
 }
 
 public int Native_RegisterSenderFlag(Handle plugin, int numParams) {
@@ -371,10 +374,12 @@ public int Native_RegisterTargetGroup(Handle plugin, int numParams) {
 
 public int Native_UnregisterSenderFlag(Handle plugin, int numParams) {
 	DropPhrasesFromList(g_senderflagTranslations, plugin);
+	return 0;
 }
 
 public int Native_UnregisterTargetGroup(Handle plugin, int numParams) {
 	DropPhrasesFromList(g_groupTranslations, plugin);
+	return 0;
 }
 
 public int Native_SendChat(Handle plugin, int numParams) {
@@ -431,6 +436,7 @@ public int Native_SendChat(Handle plugin, int numParams) {
 	g_sanitizeInput &=~ mcpInputBanNewline;
 	QueueMessage();
 	if (wouldBan) g_sanitizeInput |= mcpInputBanNewline;
+	return 0;
 }
 
 public int Native_SetNamePrefix(Handle plugin, int numParams) {
@@ -439,6 +445,7 @@ public int Native_SetNamePrefix(Handle plugin, int numParams) {
 		GetNativeString(2, clientNamePrefix[client], sizeof(clientNamePrefix[]));
 	else
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+	return 0;
 }
 
 public int Native_GetNamePrefix(Handle plugin, int numParams) {
@@ -448,6 +455,7 @@ public int Native_GetNamePrefix(Handle plugin, int numParams) {
 		SetNativeString(2, clientNamePrefix[client], maxlen);
 	else
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+	return 0;
 }
 
 public int Native_SetChatColor(Handle plugin, int numParams) {
@@ -456,6 +464,7 @@ public int Native_SetChatColor(Handle plugin, int numParams) {
 		GetNativeString(1, clientChatColor[client], sizeof(clientChatColor[]));
 	else
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+	return 0;
 }
 
 public int Native_GetChatColor(Handle plugin, int numParams) {
@@ -465,6 +474,7 @@ public int Native_GetChatColor(Handle plugin, int numParams) {
 		SetNativeString(2, clientChatColor[client], maxlen);
 	else
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
+	return 0;
 }
 
 public any Native_SetMsgData(Handle plugin, int numParams) {

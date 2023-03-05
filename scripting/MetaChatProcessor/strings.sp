@@ -80,7 +80,7 @@ bool ParseChatColor(const char[] color, char[] output, int maxsize, int author) 
  * @param maxlen - output size
  * @return length of color code or 0 if not a color
  */
-int GetNativeColor(const char[] buffer, char out[]="", int maxlen=0) {
+int GetNativeColor(const char[] buffer, char[] out="", int maxlen=0) {
 	if (buffer[0] == 0) { //not a color
 		return 0;
 	} else if (buffer[0]<=0x10 && g_bIsCSGOColors) { //csgo colors

@@ -49,7 +49,7 @@ char g_msgNameTags[4][32]; //arbitrary short buffer that can contain a format su
 char clientNamePrefix[MAXPLAYERS+1][MCP_MAXLENGTH_NAME];
 char clientChatColor[MAXPLAYERS+1][MCP_MAXLENGTH_COLORTAG];
 
-enum mcpCompatibility (<<=1) {
+enum mcpCompatibility {
 	mcpCompatNone     = 0,
 	mcpCompatSCPRedux = (1<<0), // Support for SCP Redux 2.3.0 - https://forums.alliedmods.net/showpost.php?p=2629088&postcount=413
 	mcpCompatDrixevel = (1<<1), // Support for Drixevel's Chat Processor - https://forums.alliedmods.net/showthread.php?t=286913
@@ -58,18 +58,18 @@ enum mcpCompatibility (<<=1) {
 	mcpCompatHexTags  = (1<<17), // Support for HexTags - https://forums.alliedmods.net/showthread.php?p=2566623
 }
 mcpCompatibility g_compatLevel = mcpCompatNone;
-enum mcpTransportMethod (+=1) {
-	mcpTransport_SayText, //means SayText*, so SayText2 if applicable
-	mcpTransport_PrintToChat, //on drixevels discussion thread unf404 seemd to like this more, will probably break chat filters tho
+enum mcpTransportMethod {
+	mcpTransport_SayText = 0, //means SayText*, so SayText2 if applicable
+	mcpTransport_PrintToChat = 1, //on drixevels discussion thread unf404 seemd to like this more, will probably break chat filters tho
 }
 mcpTransportMethod g_messageTransport = mcpTransport_SayText; //how to send message
-enum mcpMessageHookMethod (+=1) {
-	mcpHook_UserMessage,
-	mcpHook_CommandListener
+enum mcpMessageHookMethod {
+	mcpHook_UserMessage = 0,
+	mcpHook_CommandListener = 1
 }
 mcpMessageHookMethod g_hookMethod = mcpHook_UserMessage; //how to hook messages
 bool g_fixCompatPostCalls = true; //always call OnChatMessagePost for scp?
-enum mcpInputSanity (<<=1) {
+enum mcpInputSanity {
 	mcpInputUnchecked   = 0,
 	mcpInputTrimMBSpace = (1<<0), // Trim Multibyte spaces from messages; messages containing only spaces can break chat
 	mcpInputStripColors = (1<<1), // Strip native color codes by default (bytes < 32); game actually does this by default, chat-processors didn't
@@ -180,6 +180,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	if (!g_bIsSource2009 && !g_bIsCSGOColors) SetFailState("This mod is currently not supported");
 	
 	pluginAPI_register();
+	return APLRes_Success;
 }
 
 public void OnCVarChanged_Version(ConVar convar, const char[] oldValue, const char[] newValue) {
@@ -275,7 +276,7 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 		
 		// replace all control characters with a question mark. not possible through steam, but hacker can do
 		int len = strlen(g_currentMessage.sender_name);
-		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
+		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x20) g_currentMessage.sender_name[pos]='?';
 		// copy as initial display name
 		strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
 		
@@ -318,7 +319,7 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	
 		// replace all control characters with a question mark. not possible through steam, but hacker can do
 		int len = strlen(g_currentMessage.sender_name);
-		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
+		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x20) g_currentMessage.sender_name[pos]='?';
 		// copy as initial display name
 		strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
 		
@@ -373,7 +374,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	
 	// replace all control characters with a question mark. not possible through steam, but hacker can do
 	int len = strlen(g_currentMessage.sender_name);
-	for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
+	for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x20) g_currentMessage.sender_name[pos]='?';
 	// copy as initial display name
 	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
 	
