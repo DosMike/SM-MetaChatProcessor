@@ -116,13 +116,18 @@ void pluginAPI_init() {
 }
 
 public void OnAllPluginsLoaded() {
-	if (g_compatLevel & mcpCompatSCPRedux)
+	if (g_compatLevel & mcpCompatSCPRedux) {
 		mcp_scp_pluginsloaded();
+		if (IsPluginLoaded("[Source 2013] Custom Chat Colors Toggle Module")) {
+			mcp_ccc_init();
+		}
+	}
 	if (g_compatLevel & mcpCompatDrixevel)
 		mcp_drixevel_pluginsloaded();
 	if (g_compatLevel & mcpCompatCiderCP)
 		mcp_cider_pluginsloaded();
 }
+
 
 // -------------------- FORWARD WRAPPER --------------------
 
@@ -157,8 +162,6 @@ static void ValidateAfterCall(const char[] stage, int error, Action& returnedAct
 	//always strip and process colors
 	if (returnedAction == Plugin_Changed) {
 		if ( (g_currentMessage.options & mcpMsgRemoveColors) == mcpMsgRemoveColors ) {
-			//remove native colors from user input, keeping tags for maybe processing
-			// changes in display name will be picked up later
 			RemoveTextColors(g_currentMessage.sender_display, sizeof(MessageData::sender_display), false);
 			g_currentMessage.changed |= RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
 		}
