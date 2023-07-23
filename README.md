@@ -35,6 +35,7 @@ As mentioned above, MCP implements compatibility layers for Simple Chat-Processo
 I want to emphasise here that I am only implementing API compatibility, not feature pairity! In addition you can switch the transport method from using SayText2 packets to TextMsg packets (system/plugin messages).
 Simple Chat-Processor also had the quirk that the Post call was only called if the message was changed. I have an optional fix for that in place, that you can enable in the config as well.
 The compatibility options for `Custom-ChatColors` and `HexTags` will try to read the clients chat colors back into MCP for other plugins to access.
+In case you still encounter weird issues with external plugins that reliably format chat messages manually or through a compatibility layer, you can turn on the `External Formatting` option and check if things improve.
 
 By Default MCP will also perform input sanitation that brings chat messages back in-line with vanilla behaviour. Native colors are not actually allowed by games by default, neither are empty messages.
 The `Trim All Whitespaces` option will catch unicode spaces as well, to properly block messages without content.
@@ -53,6 +54,7 @@ The config can be found at `addons/sourcemod/config/metachatprocessor.cfg`:
 		"Custom-ChatColors"	"1"
 		"HexTags"		"1"
 		"Fix Post Calls"	"0"
+		"External Formatting" "0"
 	}
 	// Transport defines the message channel/type. You should probably keep it at SayText.
 	// Possible values: [ PrintToChat , SayText ]

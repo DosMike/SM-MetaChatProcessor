@@ -70,6 +70,7 @@ void LoadCompatConfig() {
 		if (kv.GetNum("Cider")>0) g_compatLevel |= mcpCompatCiderCP;
 		if (kv.GetNum("Custom-ChatColors")>0) g_compatLevel |= mcpCompatCCC;
 		if (kv.GetNum("HexTags")>0) g_compatLevel |= mcpCompatHexTags;
+		if (kv.GetNum("External Formatting")>0) g_compatLevel |= mcpCompatExtFormat;
 		g_fixCompatPostCalls = (kv.GetNum("Fix Post Calls")>0);
 		kv.GoBack();
 	} else LogError("[MCP] 'Compatibility' section missing from config");
@@ -107,7 +108,7 @@ void LoadCompatConfig() {
 
 static void GenerateDefaultConfig(KeyValues kv, const char[] path) {
 	kv.ImportFromString("config { "...
-		"Compatibility { \"SCP Redux\" 1 Drixevel 1 Cider 1 \"Custom-ChatColors\" 0 HexTags 0 \"Fix Post Calls\" 0 } "...
+		"Compatibility { \"SCP Redux\" 1 Drixevel 1 Cider 1 \"Custom-ChatColors\" 0 HexTags 0 \"Fix Post Calls\" 0 \"External Formatting\" 0 } "...
 		"Transport SayText HookMode UserMessage "...
 		"\"Input Sanitizer\" { \"Trim All Whitespaces\" 1 \"Ban On NewLine\" 1 \"Strip Native Colorcodes\" 1 } "...
 		"}");
@@ -255,4 +256,45 @@ void BuildMessageFormat(mcpSenderFlag senderflags, mcpTargetGroup targetgroup, c
 			strcopy(buffer[pos], bufferlen-pos, "Spec");
 		}
 	}
+}
+
+/**
+ * Check if a plugin is loaded by name; expensive check!
+ * @param name, the name to check, (nameStrict?case sensitive+exact:case insensitive+contains)
+ * @param nameStrict, if true, the name needs to match exactly, otherwise name value needs to be contained
+ * @param author, the author to check, optional+case insensitive+(authorStrict?exact:contains)
+ * @param authorStrict, if false, author name needs to contain string, if true, author string needs to match exact
+ * @param version, if non-empty, case sensitive+exact requirement; output value for found plugin
+ * @param versionLength, max buffer size for version
+ * @return true if the plugin was found
+ */
+stock bool IsPluginLoaded(const char[] name, bool nameStrict=true, const char[] author=NULL_STRING, bool authorStrict=false, char[] version="", int versionLength=0) {
+	Handle iter = GetPluginIterator();
+	char buffer[128];
+	while (MorePlugins(iter)) {
+		Handle plugin = ReadPlugin(iter);
+		GetPluginInfo(plugin, PlInfo_Name, buffer, sizeof(buffer));
+		if (nameStrict) {
+			if (!StrEqual(buffer, name, true)) continue;
+		} else {
+			if (StrContains(buffer, name, false)==-1) continue;
+		}
+		if (!IsNullString(author)) {
+			GetPluginInfo(plugin, PlInfo_Author, buffer, sizeof(buffer));
+			if (authorStrict) {
+				if (!StrEqual(buffer, author, false)) continue;
+			} else {
+				if (StrContains(buffer, author, false)==-1) continue;
+			}
+		}
+		if (versionLength>0) {
+			GetPluginInfo(plugin, PlInfo_Version, buffer, sizeof(buffer));
+			if (version[0]!=0 && !StrEqual(buffer, version)) break;
+			strcopy(version, versionLength, buffer);
+		}
+		delete iter;
+		return true;
+	}
+	delete iter;
+	return false;
 }

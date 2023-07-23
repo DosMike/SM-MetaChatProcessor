@@ -24,12 +24,12 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "23w05a"
+#define PLUGIN_VERSION "23w29a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
-	author = "reBane, based on SCP Redux, Chat-Processor and Cider",
-	description = "Process chat and allows other plugins to manipulate chat.",
+	author = "reBane",
+	description = "Process chat and allows other plugins to manipulate chat, based on SCP Redux, Chat-Processor and Cider",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=337455"
 };
@@ -50,12 +50,13 @@ char clientNamePrefix[MAXPLAYERS+1][MCP_MAXLENGTH_NAME];
 char clientChatColor[MAXPLAYERS+1][MCP_MAXLENGTH_COLORTAG];
 
 enum mcpCompatibility {
-	mcpCompatNone     = 0,
-	mcpCompatSCPRedux = (1<<0), // Support for SCP Redux 2.3.0 - https://forums.alliedmods.net/showpost.php?p=2629088&postcount=413
-	mcpCompatDrixevel = (1<<1), // Support for Drixevel's Chat Processor - https://forums.alliedmods.net/showthread.php?t=286913
-	mcpCompatCiderCP  = (1<<2), // Support for CiderChatProcessor - https://forums.alliedmods.net/showthread.php?p=2646798
-	mcpCompatCCC      = (1<<16), // Support for Custom Chat Colors - https://forums.alliedmods.net/showthread.php?p=1721580
-	mcpCompatHexTags  = (1<<17), // Support for HexTags - https://forums.alliedmods.net/showthread.php?p=2566623
+	mcpCompatNone      = 0,
+	mcpCompatSCPRedux  = (1<<0), // Support for SCP Redux 2.3.0 - https://forums.alliedmods.net/showpost.php?p=2629088&postcount=413
+	mcpCompatDrixevel  = (1<<1), // Support for Drixevel's Chat Processor - https://forums.alliedmods.net/showthread.php?t=286913
+	mcpCompatCiderCP   = (1<<2), // Support for CiderChatProcessor - https://forums.alliedmods.net/showthread.php?p=2646798
+	mcpCompatCCC       = (1<<16), // Support for Custom Chat Colors - https://forums.alliedmods.net/showthread.php?p=1721580
+	mcpCompatHexTags   = (1<<17), // Support for HexTags - https://forums.alliedmods.net/showthread.php?p=2566623
+	mcpCompatExtFormat = (1<<31), // Support any plugin that consistently applies tags and colors
 }
 mcpCompatibility g_compatLevel = mcpCompatNone;
 enum mcpTransportMethod {
@@ -294,7 +295,7 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 
 public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	// collect the message
-	int tmp=(g_currentMessage.listRecipients == null ? 0 : g_currentMessage.listRecipients.Length);
+	
 	g_currentMessage.Reset();
 	g_currentMessage.sender = msg.ReadByte();
 	if (!g_currentMessage.sender) return Plugin_Continue;
@@ -490,7 +491,8 @@ bool ProcessMessage() {
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
 	
 	//...but default colors are added after, if missing, so i guess i'll just do it here?
-	g_currentMessage.changed |= ApplyClientChatColors(); //process colors. this applies prefix and colors if not already done
+	//process colors. this applies prefix and colors if not already done
+	g_currentMessage.changed |= ApplyClientChatColors();
 	
 	//processing message hooks (late)
 	result = Call_OnChatMessage(1); //can still change colors if wanted i guess
@@ -677,7 +679,7 @@ bool ApplyClientChatColors() {
 		RemoveTextColors(g_currentMessage.message, sizeof(MessageData::message), false);
 		return true;
 	}
-	bool changed = result == Plugin_Changed;
+	bool changed = result >= Plugin_Changed;
 	
 	char colTagEnd[MCP_MAXLENGTH_NATIVECOLOR];
 	//was the name formatted? does the name tag spill color onto the name?
@@ -689,13 +691,14 @@ bool ApplyClientChatColors() {
 			FormatEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), "%s\x03%s", namePrefix, g_currentMessage.sender_name);
 		}
 		//don't set changed flag here, as that's standard behaviour/colors
-	} else { //there's custom formatting going on
+	} else if (!(g_compatLevel & mcpCompatExtFormat)) {
+		//name and prefix are changed, and we are tasked to format the message
 		//we only need to concat these two
 		FormatEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), "%s%s", namePrefix, displayName);
 		changed = true;
 	}
 	//alright now let's check. normally formats prefix char with the default color, so if we have a color and it's not default, prepend to message
-	if (chatColor[0] > 1) {//not empty string, not \x01 color
+	if (chatColor[0] > 1 && !(g_compatLevel & mcpCompatExtFormat)) {//not empty string, not \x01 color
 		Format(g_currentMessage.message, sizeof(MessageData::message), "%s%s", chatColor, g_currentMessage.message);
 		changed = true;
 	}
