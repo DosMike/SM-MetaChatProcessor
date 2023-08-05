@@ -426,9 +426,9 @@ public int ChatTagProfileMenuHandler(Menu menu, MenuAction action, int param1, i
 		}
 	} else if (action == MenuAction_Select) {
 		char buffer[32], name[32];
-		menu.GetItem(param2, buffer, sizeof(buffer));
+		menu.GetItem(param2, buffer, 0, _, name, sizeof(name)); //info buffer is too small
+		if (!StrEqual(name, STR_NO_PROFILE)) buffer = name;
 		mcpct_profile.Set(param1, buffer);
-		name = (buffer[0]==0) ? STR_NO_PROFILE : buffer;
 		if (UpdateProfile(param1)) {
 			PrintToChat(param1, "[ChatTag] You activate profile \"%s\"", name);
 		} else {
