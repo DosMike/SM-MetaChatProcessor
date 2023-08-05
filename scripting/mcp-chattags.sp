@@ -142,7 +142,6 @@ void LoadConfig() {
 			kv.GetString("textcolor", buffer, sizeof(buffer), "\x01");
 			TranslateColor(buffer, sizeof(buffer));
 			strcopy(style.chat, sizeof(ChatStyle::chat), buffer);
-			PrintToChatAll("\x01Loaded Profile %s (%s): %sNAME\x01 : %sMessage", style.name, style.filter, style.tag, style.chat);
 			profiles.PushArray(style);
 		} while (kv.GotoNextKey());
 	}
