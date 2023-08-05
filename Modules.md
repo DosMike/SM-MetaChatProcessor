@@ -16,7 +16,7 @@ set the convar `chattag_menu_enabled` to 0.
 Reloading the config can be done with the ADMFLAG_CONFIG command `sm_reloadchattags`.
 
 The config will be loaded from sourcemod/configs/mcp-chattags.cfg. If that file is not found,
-it will try the legacy sourcemod/configs/custom-chatcolors.cfg instead.
+it will try the legacy [sourcemod/configs/custom-chatcolors.cfg](https://github.com/DoctorMcKay/sourcemod-plugins/blob/master/configs/custom-chatcolors.cfg) instead.
 
 ```
 admin_colors 
