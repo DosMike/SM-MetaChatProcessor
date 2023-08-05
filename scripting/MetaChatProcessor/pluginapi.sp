@@ -63,6 +63,12 @@ public void pluginAPI_register() {
 	CreateNative("MCP_SetMessageData", Native_SetMsgData);
 	CreateNative("MCP_GetMessageData", Native_GetMsgData);
 	
+	CreateNative("MCP_ParseChatColor", Native_ParseChatColor);
+	CreateNative("MCP_RemoveTextColors", Native_RemoveTextColors);
+	CreateNative("MCP_GetStringColor", Native_GetStringColor);
+	CreateNative("MCP_TrimStringMB", Native_TrimStringMB);
+	CreateNative("MCP_CollapseColors", Native_CollapseColors);
+	
 	RegPluginLibrary("MetaChatProcessor");
 }
 
@@ -464,7 +470,7 @@ public int Native_GetNamePrefix(Handle plugin, int numParams) {
 public int Native_SetChatColor(Handle plugin, int numParams) {
 	int client = GetNativeCell(1);
 	if (1<=client<=MaxClients && IsClientConnected(client))
-		GetNativeString(1, clientChatColor[client], sizeof(clientChatColor[]));
+		GetNativeString(2, clientChatColor[client], sizeof(clientChatColor[]));
 	else
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index or client not connected");
 	return 0;
@@ -502,5 +508,59 @@ public any Native_GetMsgData(Handle plugin, int numParams) {
 	if (at>=0) {
 		return g_currentMessage.userMessageData.Get(at, ExternalData::data);
 	}
+	return 0;
+}
+
+public any Native_ParseChatColor(Handle plugin, int numParams) {
+	int length;
+	GetNativeStringLength(1, length);
+	char[] input = new char[length+1];
+	GetNativeString(1, input, length+1);
+	int outlength = GetNativeCell(3);
+	char[] output = new char[outlength];
+	int author = GetNativeCell(4);
+	bool result = ParseChatColor(input, output, outlength, author);
+	if (result) SetNativeString(2, output, outlength);
+	return result;
+}
+public any Native_RemoveTextColors(Handle plugin, int numParams) {
+	int outlength = GetNativeCell(2);
+	char[] output = new char[outlength];
+	GetNativeString(1, output, outlength);
+	bool tags = GetNativeCell(3);
+	bool result = RemoveTextColors(output, outlength, tags);
+	if (result) SetNativeString(1, output, outlength);
+	return result;
+}
+public any Native_GetStringColor(Handle plugin, int numParams) {
+	int length;
+	GetNativeStringLength(1, length);
+	char[] input = new char[length+1];
+	GetNativeString(1, input, length+1);
+	int outlength = GetNativeCell(3);
+	char[] output = new char[outlength];
+	bool post = GetNativeCell(4);
+	bool result = GetStringColor(input, output, outlength, post);
+	if (result) SetNativeString(2, output, outlength);
+	return result;
+}
+public any Native_TrimStringMB(Handle plugin, int numParams) {
+	int length;
+	GetNativeStringLength(1, length);
+	length+=1;
+	char[] input = new char[length];
+	GetNativeString(1, input, length);
+	bool result = TrimStringMB(input);
+	if (result) SetNativeString(1, input, length);
+	return result;
+}
+public any Native_CollapseColors(Handle plugin, int numParams) {
+	int length;
+	GetNativeStringLength(1, length);
+	length+=1;
+	char[] input = new char[length];
+	GetNativeString(1, input, length);
+	CollapseColors(input, length);
+	SetNativeString(1, input, length);
 	return 0;
 }
