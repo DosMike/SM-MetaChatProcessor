@@ -30,11 +30,6 @@
  *
  * Version: $Id$
  */
-/**
- * About the MCP Edits:
- * The proxy functions at the bottom responsible for sending messages to chat
- *  were edited to use MCP_SendChat instead of PrintToChat
- */
 
 #pragma semicolon 1
 
@@ -45,9 +40,9 @@
 
 public Plugin myinfo = 
 {
-	name = "Basic Chat, MCP Edit",
-	author = "AlliedModders LLC, reBane",
-	description = "Basic Communication Commands, Calling into MCP",
+	name = "Basic Chat",
+	author = "AlliedModders LLC",
+	description = "Basic Communication Commands",
 	version = SOURCEMOD_VERSION,
 	url = "http://www.sourcemod.net/"
 };
@@ -64,7 +59,6 @@ EngineVersion g_GameEngine = Engine_Unknown;
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
-	LoadTranslations("metachatprocessor.phrases");
 	
 	g_GameEngine = GetEngineVersion();
 
@@ -79,6 +73,7 @@ public void OnPluginStart()
 		RegAdminCmd("sm_hsay", Command_SmHsay, ADMFLAG_CHAT, "sm_hsay <message> - sends hint message to all players");	
 	}
 	
+	RegAdminCmd("sm_dsay", Command_SmDsay, ADMFLAG_CHAT, "sm_dsay <message> - sends hud message to all players");
 	RegAdminCmd("sm_tsay", Command_SmTsay, ADMFLAG_CHAT, "sm_tsay [color] <message> - sends top-left message to all players");
 	RegAdminCmd("sm_chat", Command_SmChat, ADMFLAG_CHAT, "sm_chat <message> - sends message to admins");
 	RegAdminCmd("sm_psay", Command_SmPsay, ADMFLAG_CHAT, "sm_psay <name or #userid> <message> - sends private message");
@@ -89,7 +84,6 @@ public void OnAllPluginsLoaded()
 {
 	MCP_HookChatMessage(mcp_DirectMessageGroupName, mcpHookGroupName);
 }
-
 
 public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
@@ -228,6 +222,35 @@ public Action Command_SmHsay(int client, int args)
 	return Plugin_Handled;	
 }
 
+public Action Command_SmDsay(int client, int args)
+{
+	if (args < 1)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_dsay <message>");
+		return Plugin_Handled;  
+	}
+	
+	char text[192];
+	GetCmdArgString(text, sizeof(text));
+ 
+	char nameBuf[MAX_NAME_LENGTH];
+	SetHudTextParams(-1.0, 0.25, 3.0, 0, 255, 127, 255, 1);
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i) || IsFakeClient(i))
+		{
+			continue;
+		}
+		FormatActivitySource(client, i, nameBuf, sizeof(nameBuf));
+		ShowHudText(i, -1, "%s: %s", nameBuf, text);
+	}
+	
+	LogAction(client, -1, "\"%L\" triggered sm_dsay (text %s)", client, text);
+	
+	return Plugin_Handled;	
+}
+
 public Action Command_SmTsay(int client, int args)
 {
 	if (args < 1)
@@ -290,18 +313,17 @@ public Action Command_SmPsay(int client, int args)
 		return Plugin_Handled;	
 	}	
 	
-	char text[192], arg[64], message[192];
+	char text[192], arg[64];
 	GetCmdArgString(text, sizeof(text));
 
 	int len = BreakString(text, arg, sizeof(arg));
-	BreakString(text[len], message, sizeof(message));
 	
 	int target = FindTarget(client, arg, true, false);
 		
 	if (target == -1)
 		return Plugin_Handled;	
 	
-	SendPrivateChat(client, target, message);
+	SendPrivateChat(client, target, text[len]);
 	
 	return Plugin_Handled;	
 }
@@ -446,6 +468,7 @@ void SendPanelToAll(int from, char[] message)
 public int Handler_DoNothing(Menu menu, MenuAction action, int param1, int param2)
 {
 	/* Do nothing */
+	return 0;
 }
 
 public Action mcp_DirectMessageGroupName(int sender, int recipient, mcpSenderFlag senderflags, mcpTargetGroup targetgroup, const char[] groupphrase, char[] groupname) {

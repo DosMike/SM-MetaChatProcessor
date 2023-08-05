@@ -1,10 +1,12 @@
 #if defined _mcp_included
 #endinput
 #endif
-#define _mcp_included 224101
+#define _mcp_included 233001
 //yywwrr: y year, w week in year, r revision in week
 
 #include <metachatprocessor/types>
+
+// ----- Hooks and message manipulation
 
 /**
  * Add a callback to the corresponding mcpHookType, see the comments in the typedef for what to use when.
@@ -197,6 +199,8 @@ stock void MCP_UnecapeCurlies(char[] message, int maxlength) {
 	ReplaceString(message, maxlength, MCP_PUA_ESCAPED_LCURLY, "{");
 }
 
+// ----- Player list manip
+
 /**
  * Collect all clients with the specified team into the arraylist
  * 
@@ -292,7 +296,7 @@ stock void MCP_FindClientsByAccess(const char[] command, int flags, ArrayList cl
  */
 stock int MCP_FindClientsBySelector(const char[] pattern, ArrayList clients, bool subtract=false, int admin=0, int filterFlags=0) {
 	int targets[MAXPLAYERS];
-	char targetName[0]; //dummy
+	char targetName[4]; //dummy
 	bool tn_is_ml;
 	int result = ProcessTargetString(pattern, admin, targets, sizeof(targets), filterFlags, targetName, sizeof(targetName), tn_is_ml);
 	if (result <= 0) {
@@ -327,6 +331,72 @@ stock void MCP_RemoveListElements(ArrayList subset, ArrayList collection) {
 	}
 }
 
+// ----- string natives
+
+
+/**
+ * roughly check if the color is a valid color code, or a rgb/rgba color specifier, or and existing color name
+ * and return the native color string for that color.
+ * for CSGO: check if strlen==1 && 0<char[0]<32
+ * for old source: check if 0<char[0]<=6 && strlen == 1 || char[0]==7/'#' && strlen == 7 || char[0]==9/'#' && strlen==9
+ * for all: check if string is valid color name (without curlies)
+ * note: output size should be at least 2
+ * @param color - the color specifier, 
+ * @param output - the native color \x01..\x10 i think for csgo, \x01..\x08 for others
+ * @param maxsize - size of output buffer
+ * @return true if the color seemd valid and output was set.
+ */
+native bool MCP_ParseChatColor(const char[] color, char[] output, int maxsize, int author);
+
+/** 
+ * Removes all color tags and color codes from a message as well as other control
+ * characters that probably don't belong there.
+ * Fun fact: TF2 removes colors from msg_name parameters by replacing code bytes 
+ * (7 bytes for \x07, 9 bytes for \x09) with \x01, but I don't know on what end
+ * 
+ * @param message - the message to process
+ * @param maxsize - the max buffer size
+ * @param removeTags - true to ALSO remove color tags, using morecolors
+ * @return true if changed
+ */
+native bool MCP_RemoveTextColors(char[] message, int maxsize, bool removeTags=true);
+
+/**
+ * - normal mode gets the color only if it is in front of any printable characters (>32)
+ * - post mode is intended to get the color a concatinated string would inherit/bleed over
+ *   (searching the last color in the string from the back)
+ * @param buffer - the text to search
+ * @param color - buffer to write color into (up to 10 bytes requried, unless cs:go) 
+ * @param bufsize - size of your output buffer
+ * @param post - true for post mode, false for normal mode
+ * @return true if a color was found
+ */
+native bool MCP_GetStringColor(const char[] buffer, char[] color, int bufsize, bool post=false);
+
+/** 
+ * Similar to TrimString, but also trips UTF8 whitespaces
+ * @return true if changed
+ */
+native bool MCP_TrimStringMB(char[] buffer);
+
+/**
+ * For a CFormated string, no color tags, only color codes.
+ * This will parse through the string and drop any redundant color. This means,
+ * Colors that are followed by other colors without visible characters in
+ * between.
+ *
+ * This is to save bytes for the already limited space, even processing and 
+ * skipping over non-ascii spaces.
+ * 
+ * This is already done at multiple points in MCP before sending a message!
+ *
+ * @param buffer - text to (potentially) shrink
+ */
+native void MCP_CollapseColors(char[] buffer);
+
+// -----
+
+
 /**
 Shared plugin information
 **/
@@ -356,5 +426,12 @@ public void __pl_MetaChatProcessor_SetNTVOptional() {
 	
 	MarkNativeAsOptional("MCP_SetMessageData");
 	MarkNativeAsOptional("MCP_GetMessageData");
+	
+	MarkNativeAsOptional("MCP_ParseChatColor");
+	MarkNativeAsOptional("MCP_RemoveTextColors");
+	MarkNativeAsOptional("MCP_GetStringColor");
+	MarkNativeAsOptional("MCP_TrimStringMB");
+	MarkNativeAsOptional("MCP_CollapseColors");
+	
 }
 #endif

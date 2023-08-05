@@ -24,11 +24,6 @@ While CPrintToChat from the color includes uses SayText2 to send messages, they 
 In addition to that, these messages might already be sent on a per-client basis for translation or otherwise, making parsing very hard!
 Instead of doing the impossible, MCP instead has a native to send SayText2 messages, to basically fake say messages.
 
-Time estimation:
-The profiler timed about .035 ms for pre and about .06 ms post processing with one player on the server (that is with SCP compat and CCC formatting the name).
-With a 32 slot TF2 server at 15 mspt my wort case estimation is roughly 13% of a game tick.
-Without baseline and chat messages not happening every game tick I'd say this is not hyper speed, but acceptable.
-
 ## Config & Setup
 
 As mentioned above, MCP implements compatibility layers for Simple Chat-Processor, Drixevel's Chat-Processor and Cider Chat-Processor. As I expect most people to not read the docs or just skim over them, all three compat layers are enabled by default.
@@ -73,6 +68,8 @@ The config can be found at `addons/sourcemod/config/metachatprocessor.cfg`:
 	} 
 }
 ```
+
+## [Modules](Modules.md)
 
 ## Forwards & Call order
 
