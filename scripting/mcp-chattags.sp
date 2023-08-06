@@ -6,7 +6,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "23w31a"
+#define PLUGIN_VERSION "23w31b"
 
 #define STR_NO_PROFILE "None"
 #define STR_PERSONAL "Personal"
@@ -63,14 +63,12 @@ public void OnPluginStart() {
 	SetCookieMenuItem(ChatTagCookieMenu, 0, "Chat Tag Settings");
 	
 	cvar_settingsMenuEnabled = CreateConVar("chattag_menu_enabled", "1", "0=Disable the /settings menu, 1=Enable", _, true, 0.0, true, 1.0);
-	cvar_settingsMenuEnabled = CreateConVar("chattag_load_behaviour", "2", "What to do when a client connects. 0=Use last active profil, 1=Use forst matching profile, 2=Like 1 if available profiles changed", _, true, 0.0, true, 2.0);
+	cvar_loadBehaviour = CreateConVar("chattag_load_behaviour", "2", "What to do when a client connects. 0=Use last active profil, 1=Use forst matching profile, 2=Like 1 if available profiles changed", _, true, 0.0, true, 2.0);
 	
 	RegAdminCmd("sm_reloadchattags", Cmd_Reload, ADMFLAG_CONFIG, "Reload chat tags");
 	
 	for (int client=1;client<=MaxClients;client++) {
-		if (IsClientInGame(client) && !IsFakeClient(client) && !IsClientReplay(client) && !IsClientSourceTV(client) && IsClientAuthorized(client)) {
-			OnClientAuthorized(client, "");
-		}
+		OnClientPostAdminCheck(client);
 	}
 }
 
@@ -80,28 +78,26 @@ public void ChatTagCookieMenu(int client, CookieMenuAction action, any info, cha
 	}
 }
 
-public Action Cmd_Reload(int admin, int args)
-{
+public Action Cmd_Reload(int admin, int args) {
 	LoadConfig();
 	for (int client=1;client<=MaxClients;client++) {
-		if (IsClientInGame(client) && !IsFakeClient(client) && !IsClientReplay(client) && !IsClientSourceTV(client) && IsClientAuthorized(client)) {
-			OnClientAuthorized(client, "");
-		}
+		OnClientPostAdminCheck(client);
 	}
 	ReplyToCommand(admin, "[ChatTag] Reloaded %d profiles", profiles.Length);
 	return Plugin_Handled;
 }
 
-
-public void OnClientAuthorized(int client, const char[] auth) {
+public void OnClientPostAdminCheck(int client) {
+	if (!IsClientInGame(client) || IsFakeClient(client) || IsClientReplay(client) || IsClientSourceTV(client) || !IsClientAuthorized(client))
+		return;
+	
 	char tmp[32];
-	bool refresh;
 	ArrayList list = FindApplicableProfiles(client);
 	
 	//check profile hash
 	// // make crc16
 	int crc;
-	for (int i; i<=list.Length; i++) {
+	for (int i; i<list.Length; i++) {
 		list.GetString(i, tmp, sizeof(tmp));
 		for (int c; tmp[c] != 0; c+=2) {
 			crc += (tmp[c]<<8)|(tmp[c+1]);
@@ -119,11 +115,14 @@ public void OnClientAuthorized(int client, const char[] auth) {
 	cvar_loadBehaviour.GetString(tmp, sizeof(tmp));
 	int load = StringToInt(tmp);
 	// // should we refresh?
-	refresh |= ((crc != oldCrc && load==2) || load==1);
+	bool refresh = ((crc != oldCrc && load==2) || load==1);
+	
+	PrintToServer("[ChatTag] %N %s (%04X -> %04X)", client, refresh ? "Refresh" : "Keep", oldCrc, crc);
 	
 	//if profile should refresh, pick the first match and save
 	if (refresh && list.Length>0) {
 		list.GetString(0, tmp, sizeof(tmp));
+		PrintToServer("[ChatTag] %N active profile now %s", client, tmp);
 		mcpct_profile.Set(client, tmp);
 		mcpct_style.Set(client, "15");
 	}
@@ -147,11 +146,14 @@ void LoadConfig() {
 	ChatStyle style;
 	if (kv.GotoFirstSubKey()) {
 		do {
+			bool isPersonal;
 			kv.GetSectionName(buffer, sizeof(buffer));
 			if (strncmp(buffer,"STEAM_",6)==0 || buffer[0]=='[') {
+				isPersonal = true;
 				strcopy(style.filter, sizeof(ChatStyle::filter), buffer);
 				style.name = STR_PERSONAL;
 			} else {
+				isPersonal = false;
 				kv.GetString("flag", style.filter, sizeof(ChatStyle::filter), "");
 				strcopy(style.name, sizeof(ChatStyle::name), buffer);
 			}
@@ -169,7 +171,14 @@ void LoadConfig() {
 			kv.GetString("textcolor", buffer, sizeof(buffer), "\x01");
 			TranslateColor(buffer, sizeof(buffer));
 			strcopy(style.chat, sizeof(ChatStyle::chat), buffer);
-			profiles.PushArray(style);
+			if (isPersonal) {
+				//insert front
+				profiles.ShiftUp(0);
+				profiles.SetArray(0, style);
+			} else {
+				//push back
+				profiles.PushArray(style);
+			}
 		} while (kv.GotoNextKey());
 	}
 	
@@ -196,10 +205,11 @@ bool UpdateProfile(int client) {
 	ChatStyle prof;
 	for (int i=profiles.Length-1; i>=0; i--) {
 		profiles.GetArray(i,prof);
-		if (StrEqual(prof.name, name, false)) {
+		if ( StrEqual(prof.name, name, false) ||
+			(StrEqual(STR_PERSONAL, name) && (prof.filter[0]=='[' || strncmp(prof.filter, "STEAM_", 6)==0)) ) {
 			
 			// can we still use this group?
-			if (!HasPermission(client, prof.filter)) break;
+			if (!HasPermission(client, prof.filter)) continue;
 			
 			prof.apply(client, style);
 			return true;
@@ -210,8 +220,9 @@ bool UpdateProfile(int client) {
 }
 
 void ProcessTagStyle(char[] tag, int taglen, ChatStyleOptions style) {
+	PrintToServer("[ChatTag] Style: %X", style);
 	char tagcopy[MCP_MAXLENGTH_NAME];
-	if (style != CS_NONE) {
+	if ((style & CS_PREFIX) != CS_NONE) {
 		strcopy(tagcopy, sizeof(tagcopy), tag);
 		if ((style & CS_TAGTEXT)==CS_NONE) style&=~CS_TAGCOLOR; //no point w/o text
 		switch (style & CS_PREFIX) {
@@ -274,7 +285,8 @@ ArrayList FindApplicableProfiles(int client) {
 		return applicable;
 	}
 	ChatStyle prof;
-	for (int i=profiles.Length-1; i>=0; i--) {
+	int max = profiles.Length;
+	for (int i; i<max; i++) {
 		profiles.GetArray(i,prof);
 		
 		// can we use this group?
@@ -414,7 +426,7 @@ void ShowChatTagProfileMenu(int client, int page=1) {
 	int at = choices.FindString(STR_PERSONAL);
 	if (at >= 0) {
 		choices.Erase(at);
-		if (StrEqual(STR_NO_PROFILE, active)) {
+		if (StrEqual(STR_PERSONAL, active)) {
 			FormatEx(buffer, sizeof(buffer), "[%s]", STR_PERSONAL);
 			menu.AddItem(STR_PERSONAL, buffer, ITEMDRAW_DISABLED);
 		} else {
