@@ -117,12 +117,9 @@ public void OnClientPostAdminCheck(int client) {
 	// // should we refresh?
 	bool refresh = ((crc != oldCrc && load==2) || load==1);
 	
-	PrintToServer("[ChatTag] %N %s (%04X -> %04X)", client, refresh ? "Refresh" : "Keep", oldCrc, crc);
-	
 	//if profile should refresh, pick the first match and save
 	if (refresh && list.Length>0) {
 		list.GetString(0, tmp, sizeof(tmp));
-		PrintToServer("[ChatTag] %N active profile now %s", client, tmp);
 		mcpct_profile.Set(client, tmp);
 		mcpct_style.Set(client, "15");
 	}
@@ -220,7 +217,6 @@ bool UpdateProfile(int client) {
 }
 
 void ProcessTagStyle(char[] tag, int taglen, ChatStyleOptions style) {
-	PrintToServer("[ChatTag] Style: %X", style);
 	char tagcopy[MCP_MAXLENGTH_NAME];
 	if ((style & CS_PREFIX) != CS_NONE) {
 		strcopy(tagcopy, sizeof(tagcopy), tag);
