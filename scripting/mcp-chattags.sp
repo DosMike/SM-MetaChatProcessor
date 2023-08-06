@@ -6,7 +6,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "23w31a"
+#define PLUGIN_VERSION "23w31b"
 
 #define STR_NO_PROFILE "None"
 #define STR_PERSONAL "Personal"
@@ -34,10 +34,12 @@ ArrayList profiles;
 
 Cookie mcpct_style; //what to color
 Cookie mcpct_profile; //profile name
+Cookie mcpct_crc; //if the crc changes, we have a new profile
 
 GlobalForward mcpct_fwd_change;
 
 ConVar cvar_settingsMenuEnabled;
+ConVar cvar_loadBehaviour;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -54,19 +56,19 @@ public void OnPluginStart() {
 	
 	mcpct_style = new Cookie("mcpchattag_style", "Style of MCP Chat Tag", CookieAccess_Private);
 	mcpct_profile = new Cookie("mcpchattag_profile", "Style of MCP Chat Tag", CookieAccess_Private);
+	mcpct_crc = new Cookie("mcpchattag_checksum", "CRC of available profiles to detect changes", CookieAccess_Private);
 	
 	mcpct_fwd_change = CreateGlobalForward("MCP_CT_OnProfileChanged", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_CellByRef);
 	
 	SetCookieMenuItem(ChatTagCookieMenu, 0, "Chat Tag Settings");
 	
 	cvar_settingsMenuEnabled = CreateConVar("chattag_menu_enabled", "1", "0=Disable the /settings menu, 1=Enable", _, true, 0.0, true, 1.0);
+	cvar_loadBehaviour = CreateConVar("chattag_load_behaviour", "2", "What to do when a client connects. 0=Use last active profil, 1=Use forst matching profile, 2=Like 1 if available profiles changed", _, true, 0.0, true, 2.0);
 	
 	RegAdminCmd("sm_reloadchattags", Cmd_Reload, ADMFLAG_CONFIG, "Reload chat tags");
 	
 	for (int client=1;client<=MaxClients;client++) {
-		if (IsClientInGame(client) && !IsFakeClient(client) && !IsClientReplay(client) && !IsClientSourceTV(client) && IsClientAuthorized(client)) {
-			OnClientAuthorized(client, "");
-		}
+		OnClientPostAdminCheck(client);
 	}
 }
 
@@ -76,31 +78,52 @@ public void ChatTagCookieMenu(int client, CookieMenuAction action, any info, cha
 	}
 }
 
-public Action Cmd_Reload(int admin, int args)
-{
+public Action Cmd_Reload(int admin, int args) {
 	LoadConfig();
 	for (int client=1;client<=MaxClients;client++) {
-		if (IsClientInGame(client) && !IsFakeClient(client) && !IsClientReplay(client) && !IsClientSourceTV(client) && IsClientAuthorized(client)) {
-			OnClientAuthorized(client, "");
-		}
+		OnClientPostAdminCheck(client);
 	}
 	ReplyToCommand(admin, "[ChatTag] Reloaded %d profiles", profiles.Length);
 	return Plugin_Handled;
 }
 
-
-public void OnClientAuthorized(int client, const char[] auth) {
+public void OnClientPostAdminCheck(int client) {
+	if (!IsClientInGame(client) || IsFakeClient(client) || IsClientReplay(client) || IsClientSourceTV(client) || !IsClientAuthorized(client))
+		return;
+	
 	char tmp[32];
-	cvar_settingsMenuEnabled.GetString(tmp, sizeof(tmp));
-	if (StringToInt(tmp)==0) {
-		ArrayList list = FindApplicableProfiles(client);
-		if (list.Length>0) {
-			list.GetString(0, tmp, sizeof(tmp));
-			mcpct_profile.Set(client, tmp);
-			mcpct_style.Set(client, "15");
+	ArrayList list = FindApplicableProfiles(client);
+	
+	//check profile hash
+	// // make crc16
+	int crc;
+	for (int i; i<list.Length; i++) {
+		list.GetString(i, tmp, sizeof(tmp));
+		for (int c; tmp[c] != 0; c+=2) {
+			crc += (tmp[c]<<8)|(tmp[c+1]);
+			if ((crc & 0x10000)!=0) crc = (crc&0xffff)+1;
+			if (tmp[c+1]==0) break; //next loop would be oob
 		}
-		delete list;
 	}
+	// // get old hash
+	mcpct_crc.Get(client, tmp, sizeof(tmp));
+	int oldCrc = StringToInt(tmp,16);
+	// // store new hash
+	FormatEx(tmp, sizeof(tmp), "%04X", crc);
+	mcpct_crc.Set(client, tmp);
+	// // get load behaviour
+	cvar_loadBehaviour.GetString(tmp, sizeof(tmp));
+	int load = StringToInt(tmp);
+	// // should we refresh?
+	bool refresh = ((crc != oldCrc && load==2) || load==1);
+	
+	//if profile should refresh, pick the first match and save
+	if (refresh && list.Length>0) {
+		list.GetString(0, tmp, sizeof(tmp));
+		mcpct_profile.Set(client, tmp);
+		mcpct_style.Set(client, "15");
+	}
+	delete list;
 	UpdateProfile(client);
 }
 
@@ -120,11 +143,14 @@ void LoadConfig() {
 	ChatStyle style;
 	if (kv.GotoFirstSubKey()) {
 		do {
+			bool isPersonal;
 			kv.GetSectionName(buffer, sizeof(buffer));
 			if (strncmp(buffer,"STEAM_",6)==0 || buffer[0]=='[') {
+				isPersonal = true;
 				strcopy(style.filter, sizeof(ChatStyle::filter), buffer);
 				style.name = STR_PERSONAL;
 			} else {
+				isPersonal = false;
 				kv.GetString("flag", style.filter, sizeof(ChatStyle::filter), "");
 				strcopy(style.name, sizeof(ChatStyle::name), buffer);
 			}
@@ -142,7 +168,14 @@ void LoadConfig() {
 			kv.GetString("textcolor", buffer, sizeof(buffer), "\x01");
 			TranslateColor(buffer, sizeof(buffer));
 			strcopy(style.chat, sizeof(ChatStyle::chat), buffer);
-			profiles.PushArray(style);
+			if (isPersonal) {
+				//insert front
+				profiles.ShiftUp(0);
+				profiles.SetArray(0, style);
+			} else {
+				//push back
+				profiles.PushArray(style);
+			}
 		} while (kv.GotoNextKey());
 	}
 	
@@ -169,10 +202,11 @@ bool UpdateProfile(int client) {
 	ChatStyle prof;
 	for (int i=profiles.Length-1; i>=0; i--) {
 		profiles.GetArray(i,prof);
-		if (StrEqual(prof.name, name, false)) {
+		if ( StrEqual(prof.name, name, false) ||
+			(StrEqual(STR_PERSONAL, name) && (prof.filter[0]=='[' || strncmp(prof.filter, "STEAM_", 6)==0)) ) {
 			
 			// can we still use this group?
-			if (!HasPermission(client, prof.filter)) break;
+			if (!HasPermission(client, prof.filter)) continue;
 			
 			prof.apply(client, style);
 			return true;
@@ -184,7 +218,7 @@ bool UpdateProfile(int client) {
 
 void ProcessTagStyle(char[] tag, int taglen, ChatStyleOptions style) {
 	char tagcopy[MCP_MAXLENGTH_NAME];
-	if (style != CS_NONE) {
+	if ((style & CS_PREFIX) != CS_NONE) {
 		strcopy(tagcopy, sizeof(tagcopy), tag);
 		if ((style & CS_TAGTEXT)==CS_NONE) style&=~CS_TAGCOLOR; //no point w/o text
 		switch (style & CS_PREFIX) {
@@ -247,7 +281,8 @@ ArrayList FindApplicableProfiles(int client) {
 		return applicable;
 	}
 	ChatStyle prof;
-	for (int i=profiles.Length-1; i>=0; i--) {
+	int max = profiles.Length;
+	for (int i; i<max; i++) {
 		profiles.GetArray(i,prof);
 		
 		// can we use this group?
@@ -387,7 +422,7 @@ void ShowChatTagProfileMenu(int client, int page=1) {
 	int at = choices.FindString(STR_PERSONAL);
 	if (at >= 0) {
 		choices.Erase(at);
-		if (StrEqual(STR_NO_PROFILE, active)) {
+		if (StrEqual(STR_PERSONAL, active)) {
 			FormatEx(buffer, sizeof(buffer), "[%s]", STR_PERSONAL);
 			menu.AddItem(STR_PERSONAL, buffer, ITEMDRAW_DISABLED);
 		} else {
@@ -395,8 +430,8 @@ void ShowChatTagProfileMenu(int client, int page=1) {
 		}
 	}
 	
-	choices.Sort(Sort_Descending, Sort_String);
-	for (int i=choices.Length-1; i>=0; i--) {
+	int max=choices.Length;
+	for (int i=0; i<max; i+=1) {
 		choices.GetString(i, name, sizeof(name));
 		if (StrEqual(name, active)) {
 			FormatEx(buffer, sizeof(buffer), "[%s]", name);
@@ -426,9 +461,9 @@ public int ChatTagProfileMenuHandler(Menu menu, MenuAction action, int param1, i
 		}
 	} else if (action == MenuAction_Select) {
 		char buffer[32], name[32];
-		menu.GetItem(param2, buffer, sizeof(buffer));
+		menu.GetItem(param2, buffer, 0, _, name, sizeof(name)); //info buffer is too small
+		if (!StrEqual(name, STR_NO_PROFILE)) buffer = name;
 		mcpct_profile.Set(param1, buffer);
-		name = (buffer[0]==0) ? STR_NO_PROFILE : buffer;
 		if (UpdateProfile(param1)) {
 			PrintToChat(param1, "[ChatTag] You activate profile \"%s\"", name);
 		} else {
