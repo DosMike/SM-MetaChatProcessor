@@ -9,9 +9,19 @@ Replacement for Custom Chat-Colors and Custom Chat-Colors Toggle.
 
 Config is compatible, but you should also be able to key on flag groups and overrides.
 
-A difference to CCC Toggle is, that players can select which of the profiles they want active.
-If you want it to behave like CCC without CCC Toggle, just activating the first profile, you can
-set the convar `chattag_menu_enabled` to 0.
+A difference to CCC Toggle is, that players can select which of the profiles they 
+want active. If you want it to behave like CCC without CCC Toggle, you can set the 
+convar `chattag_menu_enabled` to 0.
+
+Setting the convar `chattag_load_behaviour` to 1, as well will also reload the
+first matching profile every time a player connects, while zero will not change 
+the profile on connect.
+
+If you set `chattag_load_behaviour` to 2, it will try to detect changes in access to 
+profiles, and switch profile, if the list of accessible profiles changes for a user. 
+This is intended to help with ranks that get unlocked externally, so users don't have 
+to know /settings is a thing. It is not possible to detect what profile excatly was 
+granted or revoked permission to, so it will always pick first in the config.
 
 Reloading the config can be done with the ADMFLAG_CONFIG command `sm_reloadchattags`.
 
