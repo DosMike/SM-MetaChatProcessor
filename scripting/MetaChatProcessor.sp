@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "23w31a"
+#define PLUGIN_VERSION "23w52a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -264,6 +264,13 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	buf.ReadString("params", g_currentMessage.sender_name, sizeof(MessageData::sender_name), 0);
 	buf.ReadString("params", g_currentMessage.message, sizeof(MessageData::message), 1);
 	
+	//ignore custom colored messages, that are not chat (CPrintToChat).
+	// according to color includes, these start with a non alpha character
+	// (no translation identifier) and have no (=empty) params.
+	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0)) {
+		return Plugin_Continue;
+	}
+	
 	// check if this is a spliterated message
 	int spliterated = FindExistingMessage();
 	if (spliterated >= 0) {
@@ -307,6 +314,13 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	msg.ReadString(g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.sender_name, sizeof(MessageData::sender_name));
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.message, sizeof(MessageData::message));
+	
+	//ignore custom colored messages, that are not chat (CPrintToChat).
+	// according to color includes, these start with a non alpha character
+	// (no translation identifier) and have no (=empty) params.
+	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0)) {
+		return Plugin_Continue;
+	}
 	
 	// check if this is a spliterated message
 	int spliterated = FindExistingMessage();

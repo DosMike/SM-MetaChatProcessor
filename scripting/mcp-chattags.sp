@@ -168,7 +168,7 @@ void LoadConfig() {
 			kv.GetString("textcolor", buffer, sizeof(buffer), "\x01");
 			TranslateColor(buffer, sizeof(buffer));
 			strcopy(style.chat, sizeof(ChatStyle::chat), buffer);
-			if (isPersonal) {
+			if (isPersonal && profiles.Length) {
 				//insert front
 				profiles.ShiftUp(0);
 				profiles.SetArray(0, style);
