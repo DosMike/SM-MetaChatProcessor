@@ -293,9 +293,9 @@ void Call_OnChatMessagePost() {
 	Call_PushCell(g_currentMessage.senderflags);
 	Call_PushCell(g_currentMessage.group);
 	Call_PushCell(g_currentMessage.options);
-	Call_PushStringEx(g_currentMessage.customTagColor, sizeof(MessageData::customTagColor), SM_PARAM_STRING_UTF8, 0);
-	Call_PushStringEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), SM_PARAM_STRING_UTF8, 0);
-	Call_PushStringEx(g_currentMessage.message, sizeof(MessageData::message), SM_PARAM_STRING_UTF8, 0);
+	Call_PushString(g_currentMessage.customTagColor);
+	Call_PushString(g_currentMessage.sender_display);
+	Call_PushString(g_currentMessage.message);
 	int error = Call_Finish();
 	
 	ValidateAfterCall("Post", error);

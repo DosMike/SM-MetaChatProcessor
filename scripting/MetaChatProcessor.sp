@@ -14,7 +14,7 @@
 //#include <profiler>
 //	Profiler profiler = new Profiler();
 //	profiler.Start();
-	
+
 //	profiler.Stop();
 //	float time = profiler.Time;
 //	float ticks = time * 100.0 / GetTickInterval();
@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "23w52a"
+#define PLUGIN_VERSION "24w17a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -102,7 +102,7 @@ enum struct MessageData {
 	
 	ArrayList listRecipients; //other plugins can't close our handle, so we are fine using this
 	ArrayList userMessageData; //data bag for other plugins to attach data to the message during processing
-	
+
 	void ClientsToUserIds() {
 		if (this.sender!=0)
 			this.sender = GetClientUserId(this.sender);
@@ -154,7 +154,7 @@ enum struct MessageData {
 }
 MessageData g_currentMessage;/** since source engine logic is single-threaded, we can do this, so yea, that's singleton */
 
-/** once the message passed the onMessage forward, it's enqueued here to be re-sent asap 
+/** once the message passed the onMessage forward, it's enqueued here to be re-sent asap
  * are datapacks better? idk
  */
 ArrayList g_processedMessages;
@@ -164,7 +164,7 @@ ArrayList g_groupTranslations;
 ArrayList g_senderflagTranslations;
 
 /** module includes that may rely on globals */
-#include "metachatprocessor/strings.sp"
+#include "MetaChatProcessor/strings.sp"
 #include "MetaChatProcessor/utilities.sp"
 #include "MetaChatProcessor/pluginapi.sp"
 #include "MetaChatProcessor/compat_scpredux.sp"
@@ -179,7 +179,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	g_bIsCSGOColors = GetEngineVersion() == Engine_CSGO;
 	g_bIsSource2009 = IsSource2009();
 	if (!g_bIsSource2009 && !g_bIsCSGOColors) SetFailState("This mod is currently not supported");
-	
+
 	pluginAPI_register();
 	return APLRes_Success;
 }
@@ -197,7 +197,7 @@ public void OnPluginStart() {
 	
 	LoadDataFiles();
 	pluginAPI_init();
-	
+
 	switch (g_hookMethod) {
 		case mcpHook_UserMessage: {
 			UserMsg userMessage;
@@ -223,22 +223,22 @@ public void OnPluginStart() {
 			SetFailState("Invalid value for g_hookMethod");
 		}
 	}
-	
+
 	ConVar version = CreateConVar("mcp_version", PLUGIN_VERSION, "MetaChatProcessor Version", FCVAR_DONTRECORD|FCVAR_NOTIFY);
 	version.AddChangeHook(OnCVarChanged_Version);
 	OnCVarChanged_Version(version, "", "");
 	delete version;
-	
+
 }
 
 public bool OnClientConnect(int client, char[] rejectmsg, int maxlen) {
 	//reset client data very early, so other plugins can load/set their defaults
 	// on client connected as usual. I know that this will poke stuff even when
 	// the clients cancel their connection attempt, but this is not doing a lot.
-	
+
 	strcopy(clientNamePrefix[client], sizeof(clientNamePrefix[]), ""); //use game default method to color name
 	strcopy(clientChatColor[client], sizeof(clientChatColor[]), ""); //whatever the format is using
-	
+
 	if (g_compatLevel & mcpCompatDrixevel)
 		mcp_drixevel_client_connect(client);
 	return true;
@@ -260,17 +260,19 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 	//by default the game does not allow colors, we let config decide
 	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
 	buf.ReadString("msg_name", g_currentMessage.msg_name, sizeof(MessageData::msg_name));
-	
+
 	buf.ReadString("params", g_currentMessage.sender_name, sizeof(MessageData::sender_name), 0);
 	buf.ReadString("params", g_currentMessage.message, sizeof(MessageData::message), 1);
-	
+
 	//ignore custom colored messages, that are not chat (CPrintToChat).
 	// according to color includes, these start with a non alpha character
 	// (no translation identifier) and have no (=empty) params.
-	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0)) {
+	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0))
 		return Plugin_Continue;
-	}
-	
+
+	if (!IsValidMessage())
+		return Plugin_Handled;
+
 	// check if this is a spliterated message
 	int spliterated = FindExistingMessage();
 	if (spliterated >= 0) {
@@ -310,17 +312,19 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	g_currentMessage.options = msg.ReadByte() ? mcpMsgDefault : mcpMsgNoConsoleCopy;
 	//by default the game does not allow colors, we let config decide
 	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
-	
+
 	msg.ReadString(g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.sender_name, sizeof(MessageData::sender_name));
 	if (msg.BytesLeft) msg.ReadString(g_currentMessage.message, sizeof(MessageData::message));
-	
+
 	//ignore custom colored messages, that are not chat (CPrintToChat).
 	// according to color includes, these start with a non alpha character
 	// (no translation identifier) and have no (=empty) params.
-	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0)) {
+	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0))
 		return Plugin_Continue;
-	}
+
+	if (!IsValidMessage())
+		return Plugin_Handled;
 	
 	// check if this is a spliterated message
 	int spliterated = FindExistingMessage();
@@ -332,20 +336,20 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 		}
 	} else {
 		//this is a new message, do some additional processing
-	
+
 		// replace all control characters with a question mark. not possible through steam, but hacker can do
 		int len = strlen(g_currentMessage.sender_name);
 		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x20) g_currentMessage.sender_name[pos]='?';
 		// copy as initial display name
 		strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
-		
+
 		g_currentMessage.listRecipients.Clear();
 		for (int recipientIndex = 0; recipientIndex < playersNum; recipientIndex++) {
 			g_currentMessage.listRecipients.Push( players[recipientIndex] );
 		}
-		
+
 		ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-		
+
 		QueueMessage();
 	}
 	return Plugin_Handled;
@@ -377,6 +381,9 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	}
 	else g_currentMessage.group = mcpTargetNone;
 	
+	if (!IsValidMessage())
+		return Plugin_Handled;
+
 	// build message format string mock
 	BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	// fetch name and message
@@ -416,7 +423,7 @@ public void OnGameFrame() {
 		//re-map recipients from uids to clients
 		g_currentMessage.UserIdsToClients();
 		if (!g_currentMessage.valid) continue; //sender left
-		
+
 		// process message
 		//if this failes we hopefully threw an error and will continue processing
 		//other messages in the next game tick, as this one was already dequeued
@@ -445,8 +452,9 @@ int FindExistingMessage() {
 	return -1;
 }
 
-void QueueMessage() {
-	//this is some basic chat sanitizing. should we do this as chat processor?
+bool IsValidMessage() {
+	//check preconditions on the message to discard early.
+	//does is some basic chat sanitizing. should we do this as chat processor?
 	// i think most server operators wont event know this can be an issue, and
 	// as they wouldn't look for it otherwise i'll do it.
 	// - Drop empty messages (vanilla behaviour)
@@ -469,15 +477,18 @@ void QueueMessage() {
 				KickClient(g_currentMessage.sender, "Hacked client detected");
 		}
 		g_currentMessage.Reset();
-		return;
+		return false;
 	}
 	TrimStringMB(tmp);
 	if (tmp[0]==0) { //message is empty or a "break chat" message
 		g_currentMessage.Reset();
-		return;
+		return false;
 	}
 	if (g_sanitizeInput & mcpInputTrimMBSpace) strcopy(g_currentMessage.message, sizeof(MessageData::message), tmp);
-	
+	return true;
+}
+
+void QueueMessage() {
 	g_currentMessage.valid = true;
 	g_currentMessage.ClientsToUserIds();
 	g_processedMessages.PushArray(g_currentMessage); //push with .valid = true
@@ -515,7 +526,7 @@ bool ProcessMessage() {
 	
 	//check if message was cleared, we dont want to send empty messages (clutter)
 	if (g_currentMessage.message[0]==0) THEN_CANCEL
-	
+
 	return true;
 #undef THEN_CANCEL
 }
@@ -534,19 +545,19 @@ static void ResendChatMessage() {
 	for (int i; i < recipientCount; i+=1) {
 		int recipient = g_currentMessage.listRecipients.Get(i);
 		if (!recipient) continue;
-		
+
 		//because i made the prefixes transalteable, we need to format for every player
 		if (!FormatChatMessage(recipient, message, sizeof(message), template, tFlags, tGroup, tGroupColor, sEffectiveName)) continue;
-		
+
 		//send a single targeted message
 		if (g_messageTransport == mcpTransport_PrintToChat) {
 			// we could use TextMsg manually to prevent hooking this,
-			// but i don't think that's really a problem. 
+			// but i don't think that's really a problem.
 			PrintToChat(recipient, "%s", message);
 		} else {
 			//  ok, so a bit about my findings on SayText2:
 			//  you could theoretically use a custom format string as message / msg_name
-			//  and %s1..%s4 would reference into the repeated params; but i guess the 
+			//  and %s1..%s4 would reference into the repeated params; but i guess the
 			//  client is actually stripping all colors (and probably control chars) from
 			//  the parameters to prevent bad user input... guess we're breaking that for
 			//  the sake of colors! ;D there also seems to be no harm in having references
@@ -583,7 +594,7 @@ static void ResendChatMessage() {
 /**
  * The intention of this is to take all this work out of the loop so it's not
  * done for every recipient. The flags won't change anymore so we do it only once.
- * 
+ *
  * @param tFlags collect translation phrases for flags [*DEAD*, *SPEC*, ...]
  * @param tGroup collect translation phrase for target group [(TEAM), ...]
  * @param nGroupSz max length
@@ -617,7 +628,7 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 	//perform message option transformations, as they are the same for all instances.
 	// stripping native colors and processing tags is now done after every stage
 	// if the flag is set, allowing for a more dynamic processing.
-	
+
 	strcopy(sEffectiveName, nEffectiveNameSz, g_currentMessage.sender_display);
 	if ( (g_currentMessage.options & mcpMsgIgnoreNameColor) == mcpMsgIgnoreNameColor ) {
 		//we need to remove all color characters from the possibly tagged display name
@@ -634,13 +645,20 @@ static bool FormatChatMessage(int client, char[] message, int maxlen, int templa
 	for (int i=0; i<tFlags.Length; i++) {
 		char buffer[64];
 		tFlags.GetString(i, buffer, sizeof(buffer));
-		Format(flags, sizeof(flags), "%s,%T", flags, buffer, client);
+		if (TranslationPhraseExists(buffer))
+			Format(flags, sizeof(flags), "%s,%T", flags, buffer, client);
+		else
+			Format(flags, sizeof(flags), "%s,%s", flags, buffer);
 	}
 	
 	char group[MCP_MAXLENGTH_TRANPHRASE];
 	if (tGroup[0]) {
-		if (Call_OnChatMessageGroupName(client, tGroup, group) == Plugin_Continue)
-			FormatEx(group, sizeof(group), "%T", tGroup, client);
+		if (Call_OnChatMessageGroupName(client, tGroup, group) == Plugin_Continue) {
+			if (TranslationPhraseExists(tGroup))
+				FormatEx(group, sizeof(group), "%T", tGroup, client);
+			else
+				FormatEx(group, sizeof(group), "%s", tGroup);
+		}
 	}
 	
 	//note: formats already specify a color as first char, we don't need to do that
@@ -672,7 +690,7 @@ static bool FormatChatMessage(int client, char[] message, int maxlen, int templa
 	//notify that we just formatted the message
 	Action result = Call_OnChatMessageFormatted(client, message, MCP_MAXLENGTH_MESSAGE);
 	return result < Plugin_Handled;
-	
+
 }
 
 /** @return true on changes */
@@ -718,3 +736,17 @@ bool ApplyClientChatColors() {
 	}
 	return changed;
 }
+
+// void DumpCurrentMessage() {
+// 	PrintToServer("Current Message: %s from %i (%s, %s)\n  Flags: %i  Group: %i  Options : %i\n  Tag: ''%s'', Name: ''%s''\n  Message: ''%s''",
+// 	g_currentMessage.msg_name,
+// 	g_currentMessage.sender,
+// 	g_currentMessage.valid ? "valid" : "invalid",
+// 	g_currentMessage.changed ? "changed" : "unchanged",
+// 	g_currentMessage.senderflags,
+// 	g_currentMessage.group,
+// 	g_currentMessage.options,
+// 	g_currentMessage.customTagColor,
+// 	g_currentMessage.sender_name,
+// 	g_currentMessage.message);
+// }

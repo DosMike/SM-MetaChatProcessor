@@ -195,12 +195,15 @@ int GetCodePoint(const char[] buffer, int& bytes=0) {
 /**
  * Retrieve the index of the previous UTF8 char. If within MB char, seeks to start
  * of character.
+ * @param buffer string to rev search
+ * @param offset offset to start from
+ * @return index of prev MB char
  */
 int GetPreviousCharMB(const char[] buffer, int offset) {
-	if (offset < 1) return 0;
+	if (offset <= 0) return 0;
 	int pos=offset-1;
 	if ((buffer[pos]&0x80)==0x00) return pos; //ascii char
-	while (pos && ((buffer[pos]&0xC0)==0x80)) pos-=1; //rev continuations
+	while (pos > 0 && ((buffer[pos]&0xC0)==0x80)) pos-=1; //rev continuations
 	return pos;
 }
 /**
@@ -230,8 +233,9 @@ bool IsCharMBSpace(const char[] buffer, int& bytes=0, bool countNonSpaces=true) 
 /** @return true if changed */
 bool TrimStringMB(char[] buffer) {
 	int inlen=strlen(buffer), from, to, tmp, tmp2;
+	if (inlen == 0) return false;
 	//find first non-space
-	while (buffer[from] && IsCharMBSpace(buffer[from], tmp) && tmp) {
+	while (from < inlen && buffer[from] && IsCharMBSpace(buffer[from], tmp) && tmp) {
 		from += tmp;
 	}
 	//find last non-space
@@ -244,7 +248,10 @@ bool TrimStringMB(char[] buffer) {
 	} while (to>from);
 	//cut
 	int len=to-from;//+\0
-	if (len <= 0) buffer[0]=0; //nothing remains
+	if (len <= 0) {
+		buffer[0]=0; //nothing remains
+		return inlen != 0;
+	}
 	if (len>inlen) ThrowError("Unexpected string expansion"); //how did we get here?
 	if (len != inlen) {
 		char[] trimmed = new char[len+1];

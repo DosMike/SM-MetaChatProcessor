@@ -6,7 +6,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "22w26a"
+#define PLUGIN_VERSION "24w18a"
 
 public Plugin myinfo = {
 	name = "SayRedirects",
@@ -81,12 +81,15 @@ public Action OnMessage_Redirect(int& sender, ArrayList recipients, mcpSenderFla
 	bool isTeamSay = mcpTargetTeam1 <= targetgroup <= mcpTargetTeamSender;
 	bool isDeadChat = (senderflags & mcpSenderDead)!=mcpSenderNone;
 	int fromTeam = sender ? GetClientTeam(sender) : 0;
-	
+
+	//abort if this is not a regular say/say_team message
+	if (targetgroup>=mcpTargetAll) return Plugin_Continue;
+
 	//use team names instead of generic (TEAM) tag for say_team
 	if (targetgroup == mcpTargetTeamSender && g_ForceTeamName && fromTeam) {
 		targetgroup = view_as<mcpTargetGroup>(fromTeam);
 	}
-	
+
 	//true if this message stays withing the senders team
 	bool checkTeam = isTeamSay;
 	if (isTeamSay && (g_AllChatMode==1||(g_AllChatMode>1 && g_AllChatMode==fromTeam))) {
@@ -94,17 +97,17 @@ public Action OnMessage_Redirect(int& sender, ArrayList recipients, mcpSenderFla
 		isTeamSay = false;
 		checkTeam = false; //add any team
 	}
-	
+
 	//i like if the TEAM tag is team colored
 	if (isTeamSay && g_TeamTagColor) {
 		options |= mcpMsgGrouptagColor;
 		strcopy(targetgroupColor, MCP_MAXLENGTH_COLORTAG, "\x03");
 	}
-	
+
 	//if we do dead chat and the sender is dead, add all alive players
 	//otherwise, if we drop teamcheck we need to add other teams alive players
 	bool addAlive = !checkTeam || (isDeadChat && g_DeadChat);
-	
+
 	for (int client=1;client<=MaxClients;client++) {
 		if (!IsClientInGame(client) || IsFakeClient(client) || client==sender) continue;
 		if (checkTeam && GetClientTeam(client)!=fromTeam) continue;
