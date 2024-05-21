@@ -60,6 +60,9 @@ public void OnAllPluginsLoaded() {
 	MCP_HookChatMessage(OnMessage_Redirect, mcpHookPre);
 	MCP_HookChatMessage(OnMessage_Snoop, mcpHookLate);
 }
+public void OnLibraryAdded(const char[] name) {
+	if (StrEqual(name, "MetaChatProcessor")) OnAllPluginsLoaded();
+}
 
 public void OnConVarChanged_SnoopFlag(ConVar convar, const char[] oldValue, const char[] newValue) {
 	g_SnoopingEnabled = newValue[0]!=0 && FindFlagByChar(newValue[0], g_SnoopFlag);

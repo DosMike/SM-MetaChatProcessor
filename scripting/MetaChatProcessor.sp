@@ -320,7 +320,8 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 	//ignore custom colored messages, that are not chat (CPrintToChat).
 	// according to color includes, these start with a non alpha character
 	// (no translation identifier) and have no (=empty) params.
-	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0))
+	// Also, the message name for chat messages always contains "chat"
+	if (g_currentMessage.msg_name[0] <= ' ' || (g_currentMessage.sender_name[0] == 0 && g_currentMessage.message[0] == 0) || StrContains(g_currentMessage.msg_name, "chat", false)==-1)
 		return Plugin_Continue;
 
 	if (!IsValidMessage())

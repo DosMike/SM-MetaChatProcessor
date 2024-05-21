@@ -162,6 +162,10 @@ public void OnAllPluginsLoaded()
 	MCP_HookChatMessage(OnMessage_Format, mcpHookFormatted);
 	MCP_HookChatMessage(OnMessage_Post, mcpHookPost);
 }
+public void OnLibraryAdded(const char[] name)
+{
+	if (StrEqual(name, "MetaChatProcessor")) OnAllPluginsLoaded();
+}
 
 bool isWordBound(char c)
 {
