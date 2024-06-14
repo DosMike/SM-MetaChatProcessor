@@ -1,0 +1,6 @@
+*.sp       text eol=auto
+*.inc      text eol=auto
+*.txt      text eol=auto
+*.cfg      text eol=auto
+*.md       text eol=auto
+.gitignore text eol=auto

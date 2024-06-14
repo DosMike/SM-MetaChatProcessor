@@ -10,7 +10,7 @@
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU General Public License, version 3.0, as published by the
  * Free Software Foundation.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
@@ -34,16 +34,16 @@
 #pragma semicolon 1
 
 #include <sourcemod>
-#include <metachatprocessor>
+#include "include/metachatprocessor"
 
 #pragma newdecls required
 
-public Plugin myinfo = 
+public Plugin myinfo =
 {
 	name = "Basic Chat",
 	author = "AlliedModders LLC",
 	description = "Basic Communication Commands",
-	version = SOURCEMOD_VERSION,
+	version = "1.12.0.7146-24w24a",
 	url = "http://www.sourcemod.net/"
 };
 
@@ -59,20 +59,21 @@ EngineVersion g_GameEngine = Engine_Unknown;
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
-	
+	LoadTranslations("metachatprocessor.phrases");
+
 	g_GameEngine = GetEngineVersion();
 
 	g_Cvar_Chatmode = CreateConVar("sm_chat_mode", "1", "Allows player's to send messages to admin chat.", 0, true, 0.0, true, 1.0);
 
 	RegAdminCmd("sm_say", Command_SmSay, ADMFLAG_CHAT, "sm_say <message> - sends message to all players");
 	RegAdminCmd("sm_csay", Command_SmCsay, ADMFLAG_CHAT, "sm_csay <message> - sends centered message to all players");
-	
+
 	/* HintText does not work on Dark Messiah */
 	if (g_GameEngine != Engine_DarkMessiah)
 	{
-		RegAdminCmd("sm_hsay", Command_SmHsay, ADMFLAG_CHAT, "sm_hsay <message> - sends hint message to all players");	
+		RegAdminCmd("sm_hsay", Command_SmHsay, ADMFLAG_CHAT, "sm_hsay <message> - sends hint message to all players");
 	}
-	
+
 	RegAdminCmd("sm_dsay", Command_SmDsay, ADMFLAG_CHAT, "sm_dsay <message> - sends hud message to all players");
 	RegAdminCmd("sm_tsay", Command_SmTsay, ADMFLAG_CHAT, "sm_tsay [color] <message> - sends top-left message to all players");
 	RegAdminCmd("sm_chat", Command_SmChat, ADMFLAG_CHAT, "sm_chat <message> - sends message to admins");
@@ -84,15 +85,19 @@ public void OnAllPluginsLoaded()
 {
 	MCP_HookChatMessage(mcp_DirectMessageGroupName, mcpHookGroupName);
 }
+public void OnLibraryAdded(const char[] name)
+{
+	if (StrEqual(name, "MetaChatProcessor")) OnAllPluginsLoaded();
+}
 
 public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
 	int startidx;
 	if (sArgs[startidx] != CHAT_SYMBOL)
 		return Plugin_Continue;
-	
+
 	startidx++;
-	
+
 	if (strcmp(command, "say", false) == 0)
 	{
 		if (sArgs[startidx] != CHAT_SYMBOL) // sm_say alias
@@ -101,13 +106,13 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 			{
 				return Plugin_Continue;
 			}
-			
+
 			SendChatToAll(client, sArgs[startidx]);
 			LogAction(client, -1, "\"%L\" triggered sm_say (text %s)", client, sArgs[startidx]);
-			
+
 			return Plugin_Stop;
 		}
-		
+
 		startidx++;
 
 		if (sArgs[startidx] != CHAT_SYMBOL) // sm_psay alias
@@ -116,31 +121,31 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 			{
 				return Plugin_Continue;
 			}
-			
+
 			char arg[64];
-			
+
 			int len = BreakString(sArgs[startidx], arg, sizeof(arg));
 			int target = FindTarget(client, arg, true, false);
-			
+
 			if (target == -1 || len == -1)
 				return Plugin_Stop;
-			
+
 			SendPrivateChat(client, target, sArgs[startidx+len]);
-			
+
 			return Plugin_Stop;
 		}
-		
+
 		startidx++;
-		
+
 		// sm_csay alias
 		if (!CheckCommandAccess(client, "sm_csay", ADMFLAG_CHAT))
 		{
 			return Plugin_Continue;
 		}
-		
+
 		DisplayCenterTextToAll(client, sArgs[startidx]);
 		LogAction(client, -1, "\"%L\" triggered sm_csay (text %s)", client, sArgs[startidx]);
-		
+
 		return Plugin_Stop;
 	}
 	else if (strcmp(command, "say_team", false) == 0 || strcmp(command, "say_squad", false) == 0)
@@ -149,13 +154,13 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		{
 			return Plugin_Continue;
 		}
-		
+
 		SendChatToAdmins(client, sArgs[startidx]);
 		LogAction(client, -1, "\"%L\" triggered sm_chat (text %s)", client, sArgs[startidx]);
-		
+
 		return Plugin_Stop;
 	}
-	
+
 	return Plugin_Continue;
 }
 
@@ -164,16 +169,16 @@ public Action Command_SmSay(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_say <message>");
-		return Plugin_Handled;	
+		return Plugin_Handled;
 	}
-	
+
 	char text[192];
 	GetCmdArgString(text, sizeof(text));
 
 	SendChatToAll(client, text);
 	LogAction(client, -1, "\"%L\" triggered sm_say (text %s)", client, text);
-	
-	return Plugin_Handled;		
+
+	return Plugin_Handled;
 }
 
 public Action Command_SmCsay(int client, int args)
@@ -181,17 +186,17 @@ public Action Command_SmCsay(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_csay <message>");
-		return Plugin_Handled;	
+		return Plugin_Handled;
 	}
-	
+
 	char text[192];
 	GetCmdArgString(text, sizeof(text));
-	
+
 	DisplayCenterTextToAll(client, text);
-	
+
 	LogAction(client, -1, "\"%L\" triggered sm_csay (text %s)", client, text);
-	
-	return Plugin_Handled;		
+
+	return Plugin_Handled;
 }
 
 public Action Command_SmHsay(int client, int args)
@@ -199,14 +204,14 @@ public Action Command_SmHsay(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_hsay <message>");
-		return Plugin_Handled;  
+		return Plugin_Handled;
 	}
-	
+
 	char text[192];
 	GetCmdArgString(text, sizeof(text));
- 
+
 	char nameBuf[MAX_NAME_LENGTH];
-	
+
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (!IsClientInGame(i) || IsFakeClient(i))
@@ -216,10 +221,10 @@ public Action Command_SmHsay(int client, int args)
 		FormatActivitySource(client, i, nameBuf, sizeof(nameBuf));
 		PrintHintText(i, "%s: %s", nameBuf, text);
 	}
-	
+
 	LogAction(client, -1, "\"%L\" triggered sm_hsay (text %s)", client, text);
-	
-	return Plugin_Handled;	
+
+	return Plugin_Handled;
 }
 
 public Action Command_SmDsay(int client, int args)
@@ -227,12 +232,12 @@ public Action Command_SmDsay(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_dsay <message>");
-		return Plugin_Handled;  
+		return Plugin_Handled;
 	}
-	
+
 	char text[192];
 	GetCmdArgString(text, sizeof(text));
- 
+
 	char nameBuf[MAX_NAME_LENGTH];
 	SetHudTextParams(-1.0, 0.25, 3.0, 0, 255, 127, 255, 1);
 
@@ -245,10 +250,10 @@ public Action Command_SmDsay(int client, int args)
 		FormatActivitySource(client, i, nameBuf, sizeof(nameBuf));
 		ShowHudText(i, -1, "%s: %s", nameBuf, text);
 	}
-	
+
 	LogAction(client, -1, "\"%L\" triggered sm_dsay (text %s)", client, text);
-	
-	return Plugin_Handled;	
+
+	return Plugin_Handled;
 }
 
 public Action Command_SmTsay(int client, int args)
@@ -256,23 +261,23 @@ public Action Command_SmTsay(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_tsay <message>");
-		return Plugin_Handled;  
+		return Plugin_Handled;
 	}
-	
+
 	char text[192], colorStr[16];
 	GetCmdArgString(text, sizeof(text));
-	
+
 	int len = BreakString(text, colorStr, 16);
-		
+
 	int color = FindColor(colorStr);
 	char nameBuf[MAX_NAME_LENGTH];
-	
+
 	if (color == -1)
 	{
 		color = 0;
 		len = 0;
 	}
-	
+
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (!IsClientInGame(i) || IsFakeClient(i))
@@ -284,8 +289,8 @@ public Action Command_SmTsay(int client, int args)
 	}
 
 	LogAction(client, -1, "\"%L\" triggered sm_tsay (text %s)", client, text);
-	
-	return Plugin_Handled;	
+
+	return Plugin_Handled;
 }
 
 public Action Command_SmChat(int client, int args)
@@ -293,16 +298,16 @@ public Action Command_SmChat(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_chat <message>");
-		return Plugin_Handled;	
-	}	
-	
+		return Plugin_Handled;
+	}
+
 	char text[192];
 	GetCmdArgString(text, sizeof(text));
 
 	SendChatToAdmins(client, text);
 	LogAction(client, -1, "\"%L\" triggered sm_chat (text %s)", client, text);
-	
-	return Plugin_Handled;	
+
+	return Plugin_Handled;
 }
 
 public Action Command_SmPsay(int client, int args)
@@ -310,22 +315,22 @@ public Action Command_SmPsay(int client, int args)
 	if (args < 2)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_psay <name or #userid> <message>");
-		return Plugin_Handled;	
-	}	
-	
+		return Plugin_Handled;
+	}
+
 	char text[192], arg[64];
 	GetCmdArgString(text, sizeof(text));
 
 	int len = BreakString(text, arg, sizeof(arg));
-	
+
 	int target = FindTarget(client, arg, true, false);
-		
+
 	if (target == -1)
-		return Plugin_Handled;	
-	
+		return Plugin_Handled;
+
 	SendPrivateChat(client, target, text[len]);
-	
-	return Plugin_Handled;	
+
+	return Plugin_Handled;
 }
 
 public Action Command_SmMsay(int client, int args)
@@ -333,17 +338,17 @@ public Action Command_SmMsay(int client, int args)
 	if (args < 1)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_msay <message>");
-		return Plugin_Handled;	
+		return Plugin_Handled;
 	}
-	
+
 	char text[192];
 	GetCmdArgString(text, sizeof(text));
 
 	SendPanelToAll(client, text);
 
 	LogAction(client, -1, "\"%L\" triggered sm_msay (text %s)", client, text);
-	
-	return Plugin_Handled;		
+
+	return Plugin_Handled;
 }
 
 int FindColor(const char[] color)
@@ -353,7 +358,7 @@ int FindColor(const char[] color)
 		if (strcmp(color, g_ColorNames[i], false) == 0)
 			return i;
 	}
-	
+
 	return -1;
 }
 
@@ -376,7 +381,7 @@ void SendChatToAll(int from, const char[] message)
 void DisplayCenterTextToAll(int client, const char[] message)
 {
 	char nameBuf[MAX_NAME_LENGTH];
-	
+
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (!IsClientInGame(i) || IsFakeClient(i))
@@ -391,7 +396,7 @@ void DisplayCenterTextToAll(int client, const char[] message)
 void SendChatToAdmins(int from, const char[] message)
 {
 	bool fromAdmin = CheckCommandAccess(from, "sm_chat", ADMFLAG_CHAT);
-	
+
 	ArrayList recipients = new ArrayList();
 	recipients.Push(from);
 	MCP_FindClientsByAccess("sm_chat", ADMFLAG_CHAT, recipients);
@@ -407,13 +412,13 @@ void SendChatToAdmins(int from, const char[] message)
 void SendDialogToOne(int client, int color, const char[] text, any ...)
 {
 	char message[100];
-	VFormat(message, sizeof(message), text, 4);	
-	
+	VFormat(message, sizeof(message), text, 4);
+
 	KeyValues kv = new KeyValues("Stuff", "title", message);
 	kv.SetColor("color", g_Colors[color][0], g_Colors[color][1], g_Colors[color][2], 255);
 	kv.SetNum("level", 1);
 	kv.SetNum("time", 10);
-	
+
 	CreateDialog(client, kv, DialogType_Msg);
 
 	delete kv;
@@ -426,7 +431,7 @@ void SendPrivateChat(int client, int target, const char[] message)
 		PrintToServer("(Private to %N) %N: %s", target, client, message);
 	else
 		recipients.Push(client);
-	
+
 	recipients.Push(target);
 	mcpSenderFlag flags = mcpSenderNone;
 	if (client) {
@@ -435,7 +440,7 @@ void SendPrivateChat(int client, int target, const char[] message)
 	}
 	MCP_SendChat(client, recipients, message, flags, mcpTargetDirect, mcpMsgGrouptagColor, "\x04", target);
 	delete recipients;
-	
+
 	LogAction(client, target, "\"%L\" triggered sm_psay to \"%L\" (text %s)", client, target, message);
 }
 
@@ -443,9 +448,9 @@ void SendPanelToAll(int from, char[] message)
 {
 	char title[100];
 	Format(title, 64, "%N:", from);
-	
+
 	ReplaceString(message, 192, "\\n", "\n");
-	
+
 	Panel mSayPanel = new Panel();
 	mSayPanel.SetTitle(title);
 	mSayPanel.DrawItem("", ITEMDRAW_SPACER);

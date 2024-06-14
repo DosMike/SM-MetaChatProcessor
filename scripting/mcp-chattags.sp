@@ -1,12 +1,12 @@
 #include <sourcemod>
 #include <clientprefs>
 
-#include "include/metachatprocessor.inc"
+#include "include/metachatprocessor"
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "23w31b"
+#define PLUGIN_VERSION "24w24a"
 
 #define STR_NO_PROFILE "None"
 #define STR_PERSONAL "Personal"
@@ -53,20 +53,20 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 public void OnPluginStart() {
 	profiles = new ArrayList(sizeof(ChatStyle));
 	LoadConfig();
-	
+
 	mcpct_style = new Cookie("mcpchattag_style", "Style of MCP Chat Tag", CookieAccess_Private);
 	mcpct_profile = new Cookie("mcpchattag_profile", "Style of MCP Chat Tag", CookieAccess_Private);
 	mcpct_crc = new Cookie("mcpchattag_checksum", "CRC of available profiles to detect changes", CookieAccess_Private);
-	
+
 	mcpct_fwd_change = CreateGlobalForward("MCP_CT_OnProfileChanged", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_CellByRef);
-	
+
 	SetCookieMenuItem(ChatTagCookieMenu, 0, "Chat Tag Settings");
-	
+
 	cvar_settingsMenuEnabled = CreateConVar("chattag_menu_enabled", "1", "0=Disable the /settings menu, 1=Enable", _, true, 0.0, true, 1.0);
 	cvar_loadBehaviour = CreateConVar("chattag_load_behaviour", "2", "What to do when a client connects. 0=Use last active profil, 1=Use forst matching profile, 2=Like 1 if available profiles changed", _, true, 0.0, true, 2.0);
-	
+
 	RegAdminCmd("sm_reloadchattags", Cmd_Reload, ADMFLAG_CONFIG, "Reload chat tags");
-	
+
 	for (int client=1;client<=MaxClients;client++) {
 		OnClientPostAdminCheck(client);
 	}
@@ -90,10 +90,10 @@ public Action Cmd_Reload(int admin, int args) {
 public void OnClientPostAdminCheck(int client) {
 	if (!IsClientInGame(client) || IsFakeClient(client) || IsClientReplay(client) || IsClientSourceTV(client) || !IsClientAuthorized(client))
 		return;
-	
+
 	char tmp[32];
 	ArrayList list = FindApplicableProfiles(client);
-	
+
 	//check profile hash
 	// // make crc16
 	int crc;
@@ -116,7 +116,7 @@ public void OnClientPostAdminCheck(int client) {
 	int load = StringToInt(tmp);
 	// // should we refresh?
 	bool refresh = ((crc != oldCrc && load==2) || load==1);
-	
+
 	//if profile should refresh, pick the first match and save
 	if (refresh && list.Length>0) {
 		list.GetString(0, tmp, sizeof(tmp));
@@ -138,7 +138,7 @@ void LoadConfig() {
 		PrintToServer("Could not find profiles config");
 	}
 	kv.ImportFromFile(buffer);
-	
+
 	profiles.Clear();
 	ChatStyle style;
 	if (kv.GotoFirstSubKey()) {
@@ -178,7 +178,7 @@ void LoadConfig() {
 			}
 		} while (kv.GotoNextKey());
 	}
-	
+
 	delete kv;
 }
 
@@ -204,10 +204,10 @@ bool UpdateProfile(int client) {
 		profiles.GetArray(i,prof);
 		if ( StrEqual(prof.name, name, false) ||
 			(StrEqual(STR_PERSONAL, name) && (prof.filter[0]=='[' || strncmp(prof.filter, "STEAM_", 6)==0)) ) {
-			
+
 			// can we still use this group?
 			if (!HasPermission(client, prof.filter)) continue;
-			
+
 			prof.apply(client, style);
 			return true;
 		}
@@ -265,11 +265,11 @@ void ApplyProfileValues(int client, const char[] name, const char[] prefix, cons
 		} else if (result == Plugin_Handled) return;
 		else if (result == Plugin_Changed) style = copyStyle;
 	}
-	
-	char tagcopy[MCP_MAXLENGTH_COLORTAG];
+
+	char tagcopy[64];
 	strcopy(tagcopy, sizeof(tagcopy), prefix);
 	ProcessTagStyle(tagcopy, sizeof(tagcopy), style);
-	
+
 	MCP_SetClientDefaultNamePrefix(client, tagcopy);
 	if ((style&CS_CHATCOLOR)!=CS_NONE) MCP_SetClientDefaultChatColor(client, color);
 	else MCP_SetClientDefaultChatColor(client, "");
@@ -284,7 +284,7 @@ ArrayList FindApplicableProfiles(int client) {
 	int max = profiles.Length;
 	for (int i; i<max; i++) {
 		profiles.GetArray(i,prof);
-		
+
 		// can we use this group?
 		if (HasPermission(client, prof.filter))
 			applicable.PushString(prof.name);
@@ -292,7 +292,7 @@ ArrayList FindApplicableProfiles(int client) {
 	return applicable;
 }
 
-/** 
+/**
  * Check if a client has a permission described by thingString.
  * This is compatible to CCC keys.
  * emtpy: pass
@@ -327,13 +327,13 @@ void TranslateColor(char[] buffer, int len) {
 	if (buffer[0]=='\0') return;
 	if (buffer[1]=='\0') {
 		if ((buffer[0]|' ')=='t') {
-			strcopy(buffer, len, "\x03\0");
+			strcopy(buffer, len, "\x03;\0");
 			return;
 		} else if ((buffer[0]|' ')=='o') {
-			strcopy(buffer, len, "\x05\0");
+			strcopy(buffer, len, "\x05;\0");
 			return;
 		} else if ((buffer[0]|' ')=='g') {
-			strcopy(buffer, len, "\x04\0");
+			strcopy(buffer, len, "\x04;\0");
 			return;
 		}
 	}
@@ -416,9 +416,9 @@ void ShowChatTagProfileMenu(int client, int page=1) {
 	} else {
 		menu.AddItem("", STR_NO_PROFILE);
 	}
-	
+
 	ArrayList choices = FindApplicableProfiles(client);
-	
+
 	int at = choices.FindString(STR_PERSONAL);
 	if (at >= 0) {
 		choices.Erase(at);
@@ -429,7 +429,7 @@ void ShowChatTagProfileMenu(int client, int page=1) {
 			menu.AddItem(STR_PERSONAL, STR_PERSONAL);
 		}
 	}
-	
+
 	int max=choices.Length;
 	for (int i=0; i<max; i+=1) {
 		choices.GetString(i, name, sizeof(name));
@@ -440,13 +440,13 @@ void ShowChatTagProfileMenu(int client, int page=1) {
 			menu.AddItem(name, name);
 		}
 	}
-	
+
 	delete choices;
-	
+
 	menu.ExitBackButton = true;
 	menu.ExitButton = true;
-	
-	if (menu.ItemCount > 7) 
+
+	if (menu.ItemCount > 7)
 		menu.DisplayAt(client, (page-1)*7, MENU_TIME_FOREVER);
 	else
 		menu.Display(client, MENU_TIME_FOREVER);
@@ -477,7 +477,7 @@ public int ChatTagProfileMenuHandler(Menu menu, MenuAction action, int param1, i
 public any Native_GetProfiles(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
-	if (!(1<=client<=MaxClients) || !IsClientInGame(client)) 
+	if (!(1<=client<=MaxClients) || !IsClientInGame(client))
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index");
 	ArrayList list = FindApplicableProfiles(client);
 	Handle retValue = CloneHandle(list, plugin);
@@ -487,13 +487,13 @@ public any Native_GetProfiles(Handle plugin, int numParams)
 
 public any Native_SetProfile(Handle plugin, int numParams) {
 	int client = GetNativeCell(1);
-	if (!(1<=client<=MaxClients) || !IsClientInGame(client)) 
+	if (!(1<=client<=MaxClients) || !IsClientInGame(client))
 		ThrowNativeError(SP_ERROR_INDEX, "Invalid client index");
 	char name[32];
 	ChatStyle profile;
 	GetNativeString(2, name, sizeof(name));
 	ChatStyleOptions style = GetNativeCell(3);
-	
+
 	if (StrEqual(name, STR_PERSONAL)) {
 		for (int i=profiles.Length-1; i>=0; i++) {
 			profiles.GetArray(i, profile);

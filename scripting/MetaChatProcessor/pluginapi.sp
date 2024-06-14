@@ -293,9 +293,9 @@ void Call_OnChatMessagePost() {
 	Call_PushCell(g_currentMessage.senderflags);
 	Call_PushCell(g_currentMessage.group);
 	Call_PushCell(g_currentMessage.options);
-	Call_PushStringEx(g_currentMessage.customTagColor, sizeof(MessageData::customTagColor), SM_PARAM_STRING_UTF8, 0);
-	Call_PushStringEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), SM_PARAM_STRING_UTF8, 0);
-	Call_PushStringEx(g_currentMessage.message, sizeof(MessageData::message), SM_PARAM_STRING_UTF8, 0);
+	Call_PushString(g_currentMessage.customTagColor);
+	Call_PushString(g_currentMessage.sender_display);
+	Call_PushString(g_currentMessage.message);
 	int error = Call_Finish();
 	
 	ValidateAfterCall("Post", error);
@@ -413,22 +413,22 @@ public int Native_SendChat(Handle plugin, int numParams) {
 			}
 		}
 	}
-	
+
 	FormatEx(g_currentMessage.sender_name, sizeof(MessageData::sender_name), "%N", sender);
 	GetNativeString(3, g_currentMessage.message, sizeof(MessageData::message));
-	
+
 	// replace all control characters with a question mark. not possible through steam, but hacker can do
 	int len = strlen(g_currentMessage.sender_name);
 	for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x32) g_currentMessage.sender_name[pos]='?';
 	// copy as initial display name
 	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
-	
+
 	g_currentMessage.senderflags = GetNativeCell(4);
 	g_currentMessage.group = GetNativeCell(5);
 	g_currentMessage.options = GetNativeCell(6);
 	if (g_currentMessage.options & mcpMsgGrouptagColor)
 		GetNativeString(7, g_currentMessage.customTagColor, sizeof(MessageData::customTagColor));
-	
+
 	BuildMessageFormat(g_currentMessage.senderflags, g_currentMessage.group, g_currentMessage.msg_name, sizeof(MessageData::msg_name));
 	g_currentMessage.valid = true;
 	g_currentMessage.changed = true; //force resend

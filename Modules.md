@@ -83,3 +83,13 @@ Replacement for Cider ChatProcessors AllChat and DeadChat with some bonus featur
 `sm_sayredirect_colorteamtag` - Set the (TEAM)-say prefix to use team color (1/0)
 
 `sm_sayredirect_forceteamname` - Force say_team messages to use the team name instead of the generic (TEAM) prefix (1/0)
+
+# mcp-mentions
+
+Enables ping sound and name highlights for when you are mentioned in chat.
+
+Has it's own /setting page with a small selection of sounds, and whether the sound requires an @name
+or should react to any mention of your name.
+
+Currently only tested on TF2!
+
