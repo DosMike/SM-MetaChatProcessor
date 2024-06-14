@@ -1,12 +1,12 @@
 /** Example Plugin */
 
 #include <sourcemod>
-#include <metachatprocessor>
+#include "include/metachatprocessor"
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "24w18a"
+#define PLUGIN_VERSION "24w24a"
 
 public Plugin myinfo = {
 	name = "SayRedirects",

@@ -34,7 +34,7 @@
 #pragma semicolon 1
 
 #include <sourcemod>
-#include <metachatprocessor>
+#include "include/metachatprocessor"
 
 #pragma newdecls required
 
@@ -43,7 +43,7 @@ public Plugin myinfo =
 	name = "Basic Chat",
 	author = "AlliedModders LLC",
 	description = "Basic Communication Commands",
-	version = SOURCEMOD_VERSION,
+	version = "1.12.0.7146-24w24a",
 	url = "http://www.sourcemod.net/"
 };
 
@@ -59,6 +59,7 @@ EngineVersion g_GameEngine = Engine_Unknown;
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
+	LoadTranslations("metachatprocessor.phrases");
 
 	g_GameEngine = GetEngineVersion();
 

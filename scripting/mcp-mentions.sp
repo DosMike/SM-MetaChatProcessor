@@ -3,12 +3,12 @@
 #include <sourcemod>
 #include <clientprefs>
 #include <sdktools>
-#include <metachatprocessor>
+#include "include/metachatprocessor"
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "24w17a"
+#define PLUGIN_VERSION "24w24a"
 
 public Plugin myinfo = {
 	name = "Mention Sound",
@@ -191,7 +191,7 @@ bool doHighlight(const char[] name, char[] message) {
 	message[offset] = name[0];
 	//build highlighted name
 	char highlight[48];
-	FormatEx(highlight, sizeof(highlight), "\x04%s%s", name, color);
+	FormatEx(highlight, sizeof(highlight), "\x04;%s%s", name, color);
 	//highlight and return
 	ReplaceString(message[offset], MCP_MAXLENGTH_MESSAGE-offset, name, highlight, false);
 	return true;
@@ -220,7 +220,7 @@ void notifClient(int client)
 {
 	if (gNotify[client] == -1) {
 		gNotify[client] = 0;
-		PrintToChat(client, "\x01\x04HEY, You were \x01@mentioned\x04 in chat, check \x01/settings\x04 to configure sounds!");
+		PrintToChat(client, "\x01;\x04;HEY, You were \x01;@mentioned\x04; in chat, check \x01;/settings\x04; to configure sounds!");
 	} else if (gNotify[client] > 0) {
 		int snd = gNotify[client]-1;
 		if (snd >= NUM_SOUNDS) snd = 1;

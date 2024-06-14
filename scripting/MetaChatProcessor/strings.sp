@@ -33,7 +33,7 @@
  * for old source: check if 0<char[0]<=6 && strlen == 1 || char[0]==7/'#' && strlen == 7 || char[0]==9/'#' && strlen==9
  * for all: check if string is valid color name
  * note: output size should be at least 2
- * @param color - the color specifier, 
+ * @param color - the color specifier,
  * @param output - the native color \x01..\x10 i think for csgo, \x01..\x08 for others
  * @param maxsize - size of output buffer
  * @return true if the color seemd valid and output was set.
@@ -41,7 +41,7 @@
 bool ParseChatColor(const char[] color, char[] output, int maxsize, int author) {
 	if (!color[0]) return false;
 	//control character == native color
-	if( (GetEngineVersion() == Engine_CSGO && 0 < color[0] <= 0x10) || 
+	if( (GetEngineVersion() == Engine_CSGO && 0 < color[0] <= 0x10) ||
 		(color[0] <= 0x06) ){ //all default colors supported by non csgo
 		output[0] = color[0];
 		output[1] = 0;
@@ -100,12 +100,12 @@ int GetNativeColor(const char[] buffer, char[] out="", int maxlen=0) {
 	}
 }
 
-/** 
+/**
  * Removes all color tags and color codes from a message as well as other control
  * characters that probably don't belong there.
- * Fun fact: TF2 removes colors from msg_name parameters by replacing code bytes 
+ * Fun fact: TF2 removes colors from msg_name parameters by replacing code bytes
  * (7 bytes for \x07, 9 bytes for \x09) with \x01, but I don't know on what end
- * 
+ *
  * @param message - the message to process
  * @param maxsize - the max buffer size
  * @param removeTags - remove color tags
@@ -123,7 +123,7 @@ bool RemoveTextColors(char[] message, int maxsize, bool removeTags=true) {
 			write+=1;
 		}
 	} else {
-		for (;message[read] && read < maxsize;read+=1) {
+		for (;read < maxsize && message[read];read+=1) {
 			if (message[read] == 7) { read+=6; continue; } //skip following RRGGBB as well
 			else if (message[read] == 8) { read+=8; continue; } //skip following RRGGBBAA as well
 			else if (0 < message[read] <= 6) continue; //skip all simple colors
@@ -179,9 +179,9 @@ int GetCodePoint(const char[] buffer, int& bytes=0) {
 	if ((buffer[0]&0x80)==0x00) { bytes=1; return buffer[0]; } //ASCII character
 	//look for multi byte headers
 	//longest throws 5+2+2+2 bits, so int32 is more than enough to hold a 4 byte utf8 codepoint
-	//if a utf8 character is broken (early 0 termination though string buffer size), 
+	//if a utf8 character is broken (early 0 termination though string buffer size),
 	// direct access would throw an array oob, but with a look that can be cought for no-thorw
-	else if ((buffer[0]&0xF8)==0xF0) { cp=buffer[0]&0x07;bytes=4; } 
+	else if ((buffer[0]&0xF8)==0xF0) { cp=buffer[0]&0x07;bytes=4; }
 	else if ((buffer[0]&0xF0)==0xE0) { cp=buffer[0]&0x0F;bytes=3; }
 	else if ((buffer[0]&0xE0)==0xC0) { cp=buffer[0]&0x1F;bytes=2; }
 	//else if ((buffer[0]&0xC0)==0x80) would be continuation; ThrowError: invalid MB char or within MB sequence?
@@ -219,8 +219,8 @@ int GetPreviousCharMB(const char[] buffer, int offset) {
  */
 bool IsCharMBSpace(const char[] buffer, int& bytes=0, bool countNonSpaces=true) {
 	switch (GetCodePoint(buffer, bytes)) {
-		case 0x20, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 
-			0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 
+		case 0x20, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002,
+			0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008,
 			0x2009, 0x200A, 0x202F, 0x205F, 0x3000:
 			return true;
 		case 0x09, 0x0A, 0x0B, 0x0C, 0x0D:
@@ -260,7 +260,7 @@ bool TrimStringMB(char[] buffer) {
 		return true;
 	} else return false;
 }
-/** 
+/**
  * source length is unchecked!
  * copy up to length number of bytes from source[sourceoffset] to dest[destoffset], accounting for destsize
  * @return number of bytes copied
@@ -276,7 +276,7 @@ int copyNchars(char[] dest, int destsize, int destoffset, const char[] source, i
  * For a CFormated string, no color tags, only color codes.
  * This will parse through the string and drop any duplicate color.
  *
- * This is to save bytes for the already limited space, even processing and 
+ * This is to save bytes for the already limited space, even processing and
  * skipping over non-ascii spaces.
  */
 void CollapseColors(char[] buffer, int maxsize) {
@@ -322,5 +322,5 @@ void CollapseColors(char[] buffer, int maxsize) {
 		write += strlen(color);
 	}
 	buffer[write]=0; //terminate at collapsed position
-	
+
 }

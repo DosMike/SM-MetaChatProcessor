@@ -24,7 +24,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "24w17a"
+#define PLUGIN_VERSION "24w24a"
 
 public Plugin myinfo = {
 	name = "Meta Chat Processor",
@@ -99,7 +99,7 @@ enum struct MessageData {
 	char sender_name[MCP_MAXLENGTH_NAME]; //should be equal to %N
 	char sender_display[MCP_MAXLENGTH_NAME]; //normally ends up as \x03%N
 	char message[MCP_MAXLENGTH_INPUT];
-	
+
 	ArrayList listRecipients; //other plugins can't close our handle, so we are fine using this
 	ArrayList userMessageData; //data bag for other plugins to attach data to the message during processing
 
@@ -129,7 +129,7 @@ enum struct MessageData {
 				this.listRecipients.Erase(recipientNo);
 		}
 	}
-	
+
 	void Reset(bool newRecipientsInstace=false) {
 		this.valid = false;
 		this.changed = false;
@@ -191,10 +191,10 @@ public void OnCVarChanged_Version(ConVar convar, const char[] oldValue, const ch
 }
 
 public void OnPluginStart() {
-	
+
 	g_bUseProtobuf = (CanTestFeatures() && GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf);
 	g_processedMessages = new ArrayList(sizeof(MessageData));
-	
+
 	LoadDataFiles();
 	pluginAPI_init();
 
@@ -283,20 +283,20 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 		}
 	} else {
 		//this is a new message, do some additional processing
-		
+
 		// replace all control characters with a question mark. not possible through steam, but hacker can do
 		int len = strlen(g_currentMessage.sender_name);
 		for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x20) g_currentMessage.sender_name[pos]='?';
 		// copy as initial display name
 		strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
-		
+
 		g_currentMessage.listRecipients.Clear();
 		for (int recipientIndex = 0; recipientIndex < playersNum; recipientIndex+=1) {
 			g_currentMessage.listRecipients.Push( players[recipientIndex] );
 		}
-		
+
 		ParseMessageFormat(g_currentMessage.msg_name, g_currentMessage.senderflags, g_currentMessage.group);
-		
+
 		QueueMessage();
 	}
 	return Plugin_Handled;
@@ -304,7 +304,7 @@ public Action OnUserMessage_SayText2Proto(UserMsg msg_id, BfRead msg, const int[
 
 public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	// collect the message
-	
+
 	g_currentMessage.Reset();
 	g_currentMessage.sender = msg.ReadByte();
 	if (!g_currentMessage.sender) return Plugin_Continue;
@@ -326,7 +326,7 @@ public Action OnUserMessage_SayText2BB(UserMsg msg_id, BfRead msg, const int[] p
 
 	if (!IsValidMessage())
 		return Plugin_Handled;
-	
+
 	// check if this is a spliterated message
 	int spliterated = FindExistingMessage();
 	if (spliterated >= 0) {
@@ -363,13 +363,13 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	int team = GetClientTeam(client);
 	if (StrEqual(command, "say_team")) teamSay = true;
 	else if (!StrEqual(command,"say")) return Plugin_Continue; //dont process say_party, if that's even received
-	
+
 	// collect basic message options
 	g_currentMessage.Reset();
 	g_currentMessage.sender = client;
 	g_currentMessage.options = mcpMsgDefault;
 	if (g_sanitizeInput & mcpInputStripColors) g_currentMessage.options |= mcpMsgRemoveColors;
-	
+
 	// generate sender flags
 	if (team == 1) g_currentMessage.senderflags = mcpSenderSpectator;
 	else if (!IsPlayerAlive(client)) g_currentMessage.senderflags = mcpSenderDead;
@@ -381,7 +381,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		else g_currentMessage.group = mcpTargetTeamSender;
 	}
 	else g_currentMessage.group = mcpTargetNone;
-	
+
 	if (!IsValidMessage())
 		return Plugin_Handled;
 
@@ -395,13 +395,13 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		StripQuotes(g_currentMessage.message);
 	}
 	g_currentMessage.message[128]=0; //this uses the max length of the chat box, no cheating
-	
+
 	// replace all control characters with a question mark. not possible through steam, but hacker can do
 	int len = strlen(g_currentMessage.sender_name);
 	for (int pos; pos<len; pos++) if (g_currentMessage.sender_name[pos] < 0x20) g_currentMessage.sender_name[pos]='?';
 	// copy as initial display name
 	strcopy(g_currentMessage.sender_display, sizeof(MessageData::sender_display), g_currentMessage.sender_name);
-	
+
 	// collect recipients
 	g_currentMessage.listRecipients.Clear();
 	for (int target=1; target<=MaxClients; target++) {
@@ -409,7 +409,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		if (teamSay && GetClientTeam(target) != team) continue;
 		g_currentMessage.listRecipients.Push(target);
 	}
-	
+
 	QueueMessage();
 	return Plugin_Handled;
 }
@@ -499,32 +499,32 @@ void QueueMessage() {
 bool ProcessMessage() {
 #define THEN_CANCEL { g_currentMessage.valid = false; return false; }
 	Action result;
-	
+
 	//mcpHookPre
 	result = Call_OnChatMessagePre();
 	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
-	
+
 	//processing message hooks (early)
 	result = Call_OnChatMessage(-1);
 	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
-	
+
 	//processing message hooks (normal)
 	//ccc/drixevel technically apply color to messages in the normal hook...
 	result = Call_OnChatMessage(0);
 	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
-	
+
 	//...but default colors are added after, if missing, so i guess i'll just do it here?
 	//process colors. this applies prefix and colors if not already done
 	g_currentMessage.changed |= ApplyClientChatColors();
-	
+
 	//processing message hooks (late)
 	result = Call_OnChatMessage(1); //can still change colors if wanted i guess
 	if (result >= Plugin_Handled) THEN_CANCEL
 	else if (result == Plugin_Changed) g_currentMessage.changed = true;
-	
+
 	//check if message was cleared, we dont want to send empty messages (clutter)
 	if (g_currentMessage.message[0]==0) THEN_CANCEL
 
@@ -534,14 +534,14 @@ bool ProcessMessage() {
 
 static void ResendChatMessage() {
 	char message[MCP_MAXLENGTH_MESSAGE];
-	
+
 	ArrayList tFlags = new ArrayList(ByteCountToCells(MCP_MAXLENGTH_TRANPHRASE));
 	char tGroup[MCP_MAXLENGTH_TRANPHRASE];
 	char tGroupColor[MCP_MAXLENGTH_COLORTAG];
 	char sEffectiveName[MCP_MAXLENGTH_NAME];
 	int template = PrepareChatFormat(tFlags, tGroup, sizeof(tGroup), tGroupColor, sizeof(tGroupColor), sEffectiveName, sizeof(sEffectiveName));
 	bool chatFlag = !(g_currentMessage.options & mcpMsgNoConsoleCopy);
-	
+
 	int recipientCount = g_currentMessage.listRecipients.Length;
 	for (int i; i < recipientCount; i+=1) {
 		int recipient = g_currentMessage.listRecipients.Get(i);
@@ -588,7 +588,7 @@ static void ResendChatMessage() {
 			EndMessage();
 		}
 	}
-	
+
 	delete tFlags;
 }
 
@@ -618,14 +618,14 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 	if (g_currentMessage.group <= mcpTargetNone || !GetNthPhrase(g_groupTranslations, g_currentMessage.group, tGroup, nGroupSz)) {
 		g_currentMessage.group = mcpTargetNone;
 	}
-	
+
 	if ( (g_currentMessage.options & mcpMsgGrouptagColor) == mcpMsgGrouptagColor ) {
 		if (!ParseChatColor(g_currentMessage.customTagColor, sGroupColor, nGroupColorSz, g_currentMessage.sender)) {
 			g_currentMessage.options &=~ mcpMsgGrouptagColor; //no color provided
 		}
 	}
 	//  name formatting
-	
+
 	//perform message option transformations, as they are the same for all instances.
 	// stripping native colors and processing tags is now done after every stage
 	// if the flag is set, allowing for a more dynamic processing.
@@ -641,7 +641,7 @@ static int PrepareChatFormat(ArrayList tFlags, char[] tGroup, int nGroupSz, char
 }
 
 static bool FormatChatMessage(int client, char[] message, int maxlen, int template, ArrayList tFlags, const char[] tGroup, const char[] tGroupColor, const char[] sEffectiveName) {
-	
+
 	char flags[33]; //skip first comma with 1 index
 	for (int i=0; i<tFlags.Length; i++) {
 		char buffer[64];
@@ -651,7 +651,7 @@ static bool FormatChatMessage(int client, char[] message, int maxlen, int templa
 		else
 			Format(flags, sizeof(flags), "%s,%s", flags, buffer);
 	}
-	
+
 	char group[MCP_MAXLENGTH_TRANPHRASE];
 	if (tGroup[0]) {
 		if (Call_OnChatMessageGroupName(client, tGroup, group) == Plugin_Continue) {
@@ -661,16 +661,16 @@ static bool FormatChatMessage(int client, char[] message, int maxlen, int templa
 				FormatEx(group, sizeof(group), "%s", tGroup);
 		}
 	}
-	
+
 	//note: formats already specify a color as first char, we don't need to do that
 	// but! we still need to fix colors for csgo
 	// why? IDK, ask valve https://forums.alliedmods.net/showthread.php?t=193328
 	if (g_bIsCSGOColors) {
 		switch (template) {
-			case 3: FormatEx(message, maxlen, "\x01\x0B%T", "Pattern_SendflagsGroup", client, flags[1], tGroupColor, group, sEffectiveName, g_currentMessage.message);
-			case 2: FormatEx(message, maxlen, "\x01\x0B%T", "Pattern_Group", client, tGroupColor, group, sEffectiveName, g_currentMessage.message);
-			case 1: FormatEx(message, maxlen, "\x01\x0B%T", "Pattern_Sendflags", client, flags[1], sEffectiveName, g_currentMessage.message);
-			case 0: FormatEx(message, maxlen, "\x01\x0B%T", "Pattern_Clean", client, sEffectiveName, g_currentMessage.message);
+			case 3: FormatEx(message, maxlen, "\x01;\x0B;%T", "Pattern_SendflagsGroup", client, flags[1], tGroupColor, group, sEffectiveName, g_currentMessage.message);
+			case 2: FormatEx(message, maxlen, "\x01;\x0B;%T", "Pattern_Group", client, tGroupColor, group, sEffectiveName, g_currentMessage.message);
+			case 1: FormatEx(message, maxlen, "\x01;\x0B;%T", "Pattern_Sendflags", client, flags[1], sEffectiveName, g_currentMessage.message);
+			case 0: FormatEx(message, maxlen, "\x01;\x0B;%T", "Pattern_Clean", client, sEffectiveName, g_currentMessage.message);
 			default: ThrowError("Message parsing broke");
 		}
 		CollapseColors(message[2], maxlen-2); //don't optimize away the hack that enables colors
@@ -687,7 +687,7 @@ static bool FormatChatMessage(int client, char[] message, int maxlen, int templa
 		int offset = GetNativeColor(message);
 		CollapseColors(message[offset], maxlen-offset);
 	}
-	
+
 	//notify that we just formatted the message
 	Action result = Call_OnChatMessageFormatted(client, message, MCP_MAXLENGTH_MESSAGE);
 	return result < Plugin_Handled;
@@ -702,7 +702,7 @@ bool ApplyClientChatColors() {
 	strcopy(namePrefix, sizeof(namePrefix), clientNamePrefix[g_currentMessage.sender]);
 	strcopy(displayName, sizeof(displayName), g_currentMessage.sender_display);
 	strcopy(chatColor, sizeof(chatColor), clientChatColor[g_currentMessage.sender]);
-	
+
 	Action result = Call_OnChatMessageColors(namePrefix, displayName, chatColor);
 	if (result >= Plugin_Handled) {
 		return true; //handled? ok I wont do anything. is it actually changed? i guess
@@ -713,7 +713,7 @@ bool ApplyClientChatColors() {
 		return true;
 	}
 	bool changed = result >= Plugin_Changed;
-	
+
 	char colTagEnd[MCP_MAXLENGTH_NATIVECOLOR];
 	//was the name formatted? does the name tag spill color onto the name?
 	if (StrEqual(g_currentMessage.sender_name, displayName) && !GetStringColor(namePrefix, colTagEnd, sizeof(colTagEnd), true)) {
@@ -721,7 +721,7 @@ bool ApplyClientChatColors() {
 		if (g_teamColorMode==1) {
 			FormatEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), "%s%s%s", namePrefix, g_teamColors[GetClientTeam(g_currentMessage.sender)], g_currentMessage.sender_name);
 		} else {
-			FormatEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), "%s\x03%s", namePrefix, g_currentMessage.sender_name);
+			FormatEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), "%s\x03;%s", namePrefix, g_currentMessage.sender_name);
 		}
 		//don't set changed flag here, as that's standard behaviour/colors
 	} else if (!(g_compatLevel & mcpCompatExtFormat)) {
@@ -730,6 +730,7 @@ bool ApplyClientChatColors() {
 		FormatEx(g_currentMessage.sender_display, sizeof(MessageData::sender_display), "%s%s", namePrefix, displayName);
 		changed = true;
 	}
+
 	//alright now let's check. normally formats prefix char with the default color, so if we have a color and it's not default, prepend to message
 	if (chatColor[0] > 1 && !(g_compatLevel & mcpCompatExtFormat)) {//not empty string, not \x01 color
 		Format(g_currentMessage.message, sizeof(MessageData::message), "%s%s", chatColor, g_currentMessage.message);
