@@ -2,11 +2,13 @@
 
 #include <sourcemod>
 #include "include/metachatprocessor"
+#include <sdktools>
+#include <tf2>
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "24w24a"
+#define PLUGIN_VERSION "25w21a"
 
 public Plugin myinfo = {
 	name = "SayRedirects",
@@ -22,6 +24,7 @@ int g_AllChatMode;
 bool g_DeadChat;
 bool g_TeamTagColor;
 bool g_ForceTeamName;
+bool g_MvMSpecChat;
 
 static void HookAndLoadConVar(ConVar convar, ConVarChanged hook) {
 	//I sometimes hate convars...
@@ -43,17 +46,20 @@ public void OnPluginStart() {
 	ConVar cvar3 = CreateConVar("sm_sayredirect_deadchat", "0", "Send messages from dead players to alive players", _, true, 0.0, true, 1.0);
 	ConVar cvar4 = CreateConVar("sm_sayredirect_colorteamtag", "0", "Color the (TEAM) tag for say_team in team color", _, true, 0.0, true, 1.0);
 	ConVar cvar5 = CreateConVar("sm_sayredirect_forceteamname", "0", "Force team say to use the team name instead of (TEAM)", _, true, 0.0, true, 1.0);
+	ConVar cvar6 = CreateConVar("sm_sayredirect_specchat", "0", "In TF2 MvM mode, allow RED to talk with SPEC and vice versa", _, true, 0.0, true, 1.0);
 	AutoExecConfig(); //gen/load config
 	HookAndLoadConVar(cvar1,OnConVarChanged_SnoopFlag);
 	HookAndLoadConVar(cvar2,OnConVarChanged_AllChat);
 	HookAndLoadConVar(cvar3,OnConVarChanged_DeadChat);
 	HookAndLoadConVar(cvar4,OnConVarChanged_TeamTagColor);
 	HookAndLoadConVar(cvar5,OnConVarChanged_ForceTeamName);
+	HookAndLoadConVar(cvar6,OnConVarChanged_SpecChat);
 	delete cvar1;
 	delete cvar2;
 	delete cvar3;
 	delete cvar4;
 	delete cvar5;
+	delete cvar6;
 }
 
 public void OnAllPluginsLoaded() {
@@ -78,6 +84,9 @@ public void OnConVarChanged_TeamTagColor(ConVar convar, const char[] oldValue, c
 }
 public void OnConVarChanged_ForceTeamName(ConVar convar, const char[] oldValue, const char[] newValue) {
 	g_ForceTeamName = convar.BoolValue;
+}
+public void OnConVarChanged_SpecChat(ConVar convar, const char[] oldValue, const char[] newValue) {
+	g_MvMSpecChat = convar.BoolValue;
 }
 
 public Action OnMessage_Redirect(int& sender, ArrayList recipients, mcpSenderFlag& senderflags, mcpTargetGroup& targetgroup, mcpMessageOption& options, char[] targetgroupColor) {
@@ -110,6 +119,15 @@ public Action OnMessage_Redirect(int& sender, ArrayList recipients, mcpSenderFla
 	//if we do dead chat and the sender is dead, add all alive players
 	//otherwise, if we drop teamcheck we need to add other teams alive players
 	bool addAlive = !checkTeam || (isDeadChat && g_DeadChat);
+
+	//allow spec <-> red chat in MVM
+	if (g_MvMSpecChat && !isTeamSay && GameRules_GetProp("m_bPlayingMannVsMachine")) {
+		if (GetClientTeam(sender) == 1) {
+			MCP_FindClientsByTeam(2, recipients); // add red if spec
+		} else {
+			MCP_FindClientsByTeam(1, recipients); // otherwise add specs
+		}
+	}
 
 	for (int client=1;client<=MaxClients;client++) {
 		if (!IsClientInGame(client) || IsFakeClient(client) || client==sender) continue;

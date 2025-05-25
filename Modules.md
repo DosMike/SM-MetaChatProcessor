@@ -84,6 +84,8 @@ Replacement for Cider ChatProcessors AllChat and DeadChat with some bonus featur
 
 `sm_sayredirect_forceteamname` - Force say_team messages to use the team name instead of the generic (TEAM) prefix (1/0)
 
+`sm_sayredirect_specchat` - Allows spectators and red team to chat in Mann vs Machine (1/0)
+
 # mcp-mentions
 
 Enables ping sound and name highlights for when you are mentioned in chat.
